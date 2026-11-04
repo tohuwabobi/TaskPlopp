@@ -1,0 +1,13 @@
+﻿# Machine-specific settings and their backups
+/config.json
+/config.before-*.json
+/shortcuts/
+*.lnk
+
+# Local runtime and synchronization artifacts
+*.log
+*.tmp
+*.sync-conflict-*
+.codex/
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,17 @@
+﻿{
+  "ShowOpenWindows": true,
+  "Programs": [
+    {
+      "Name": "Explorer",
+      "ProcessName": "explorer",
+      "TitleContains": "",
+      "ExecutablePath": "",
+      "AppId": "",
+      "StartKind": "",
+      "StartTarget": "",
+      "FolderPath": "",
+      "LaunchAlways": false
+    }
+  ],
+  "HiddenWindows": []
+}
