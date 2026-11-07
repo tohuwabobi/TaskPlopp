@@ -5,6 +5,10 @@ function Get-TextProperty($Object, [string]$Name) {
 }
 
 function ConvertTo-TaskPloppSettings($Data) {
+    if($Data.PSObject.Properties.Name -notcontains 'DictationEngine') {
+        $Data | Add-Member -NotePropertyName DictationEngine -NotePropertyValue 'Whisper'
+    }
+    if($Data.DictationEngine -notin @('Whisper','Vosk')) { throw 'Diktat: Unbekannte lokale Engine.' }
     if($Data.PSObject.Properties.Name -notcontains 'AutoLockEnabled') {
         $Data | Add-Member -NotePropertyName AutoLockEnabled -NotePropertyValue $true
     }

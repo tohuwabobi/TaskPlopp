@@ -209,6 +209,65 @@ Ein Start ueber PowerShell kann kurz ein Konsolenfenster zeigen.
 
 Herstellerhinweis: [Citrix-Tastaturverhalten](https://docs.citrix.com/en-us/citrix-workspace-app-for-windows/keyboard.html).
 
+## Lokales Diktat
+
+Unter **Konfiguration > Diktat > Diktat-Komponenten installieren** werden beide
+lokalen Engines und deutsche Modelle eingerichtet: whisper.cpp mit dem
+mehrsprachigen Modell **base** sowie Vosk mit **small-de-0.15**. Download etwa
+220 MB. Dateien liegen unter `%LOCALAPPDATA%\TaskPlopp\Dictation`, ausserhalb
+von Git und Syncthing. Windows PowerShell 5.1 x64 und Windows `curl.exe` werden
+verwendet; Python, pip, GPU und API-Schluessel werden nicht gebraucht.
+Normalerweise sind keine Adminrechte erforderlich. Fehlende Systemkomponenten
+oder gesperrte Downloads werden als Fehler angezeigt.
+
+Die Auswahl **whisper.cpp / Vosk** gilt nach Speichern fuer das naechste Diktat.
+Die Einrichtung selbst installiert sofort, auch wenn der Dialog danach abgebrochen
+wird. Beide Engines werden nach dem Entpacken mit synthetischer Stille geprueft;
+erst danach gelten sie als bereit. Fortschritt und Fehler stehen sowohl im
+Konfigurationsdialog als auch in der gemeinsamen Statusleiste.
+
+- Mikrofon oben einmal klicken: Aufnahme vom Windows-Standardmikrofon beginnt.
+  Das Mikrofon waehlt man zuvor ueber **Audio**. Gruener Pegelverlauf zeigt den
+  Eingang, keine bestaetigte Spracherkennung.
+- Erneut klicken: Aufnahme stoppen und mit der beim Start ausgewaehlten Engine
+  transkribieren. Orange zeigt Verarbeitung; die GUI bleibt bedienbar.
+- Erfolg: erkannter Text liegt unveraendert in der Zwischenablage, mit **Strg+V**
+  einfuegen. Keine Zusammenfassung, Bereinigung oder automatische Texteingabe.
+- Rechtsklick auf Mikrofon: **Aufnahme verwerfen** oder nach Clipboardfehler
+  **Erneut in Zwischenablage kopieren**. Ein neues Diktat verwirft das alte Ergebnis.
+- Bei leeren/zu kurzen Aufnahmen, sehr niedrigem Pegel oder fehlendem Ergebnis
+  bleibt die Zwischenablage erhalten. Ein messbarer Pegel beweist keine Sprache;
+  Erkennungsfehler oder erfundener Text des Modells sind weiterhin moeglich.
+
+X blendet TaskPlopp aus; eine laufende Aufnahme bleibt aktiv und wird am
+Infobereich-Symbol/Tooltip angezeigt. Wiederaufruf zeigt ihren Status. Echtes
+Beenden verwirft laufende Aufnahmen und beendet eigene Hilfsprozesse.
+Es gibt kein kuenstliches Zeitlimit. Die automatische PC-Sperre bleibt aktiv.
+Einrichtung und Diktat sind gegenseitig gesperrt; nur die ausgewaehlte Engine
+laedt ihr Modell. Es gibt keinen staendig laufenden Transkriptionsserver.
+
+Audio wird als PCM 16 kHz, 16 Bit, Mono im RAM gehalten und ueber Speicherpuffer
+bzw. eine binaere WAV-Pipe verarbeitet. Keine eigenen Audio-Tempdateien oder
+Archive. Modelle und heruntergeladene Installationspakete bleiben auf der Platte.
+Windows-Auslagerungsdatei, Speicherabbilder und Windows-Zwischenablageverlauf/
+Cloud-Synchronisation folgen den vorhandenen Windows-Einstellungen.
+Nach Einrichtung benoetigen die Engines keine Internetverbindung.
+
+Verwendete Quellen und Lizenzen:
+
+- [whisper.cpp b5454](https://github.com/ggml-org/whisper.cpp/releases/tag/b5454),
+  [MIT](https://github.com/ggml-org/whisper.cpp/blob/b5454/LICENSE).
+- [Whisper-Modell base](https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1),
+  Ursprung [OpenAI Whisper, MIT](https://github.com/openai/whisper/blob/main/LICENSE).
+- [Vosk v0.3.45](https://github.com/alphacep/vosk-api/releases/tag/v0.3.45),
+  [Apache 2.0](https://github.com/alphacep/vosk-api/blob/v0.3.45/COPYING).
+- [Deutsches Vosk-Modell small-de-0.15, Apache 2.0](https://alphacephei.com/vosk/models).
+
+Die Einrichtung pinnt Versionen und prueft veroeffentlichte SHA-256-Werte fuer
+whisper.cpp und das Whisper-Modell. Vosk stellt im verwendeten Release keinen
+Herausgeber-Digest bereit; Download erfolgt von festen offiziellen HTTPS-Quellen.
+Keine Behauptung eines unabhaengigen Hashnachweises fuer diese Vosk-Dateien.
+
 ## Pruefung
 
 ```powershell
@@ -216,6 +275,8 @@ powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPlopp.p
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudio.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudioUi.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppIdleLock.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppDictation.ps1 -Engines
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppDictationUi.ps1 -Engines
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppApps.ps1 -StoreLaunch
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\TaskPlopp.ps1 -SmokeTest
 ```
@@ -246,6 +307,15 @@ Toolbar-/Konfigurationssynchronisierung, Abbrechen und Lebensdauer des Timers.
 Die UI benutzt eine temporaere Konfiguration; ihre Vorschau steht unter
 `%TEMP%\TaskPlopp-idle-config.png`. Eine tatsaechliche PC-Sperre und das Verhalten
 bei Eingaben innerhalb von Citrix sind anschliessend lokal zu pruefen.
+
+Die Diktattests verwenden synthetische Audiopuffer bzw. mit Windows Hedda erzeugte
+deutsche Sprache im RAM, keine Mikrofonaufnahme. `-Engines` benoetigt die eingerichteten
+Modelle und fuer die Teststimme Windows-Sprachsynthese. Der Engine-Test vergleicht
+den ganzen Testsatz. Der GUI-Test prueft Konfiguration, Fehler, Verwerfen, Pegel,
+Kopierwiederholung und einen weiterlaufenden UI-Heartbeat mit beiden echten Engines.
+Dabei wird die Clipboard-Schreibgrenze simuliert; die persoenliche Zwischenablage
+bleibt unberuehrt. Echte Mikrofonaufnahme, Geraetewechsel, Einfuegen und Offlineprobe
+bleiben manuelle Abnahmeschritte. Vorschauen: `%TEMP%\TaskPlopp-dictation-*.png`.
 
 ## Symbol
 

@@ -83,6 +83,51 @@ function Show-TaskPloppConfiguration {
     $lockLayout.Controls.AddRange(@($lockEnabled,$lockLabel,$lockMinutes,$lockHelp))
     $lockTab.Controls.Add($lockLayout)
     $tabs.TabPages.AddRange(@($favoritesTab,$hiddenTab,$lockTab))
+    $dictationTab=New-Object Windows.Forms.TabPage
+    $dictationTab.Name='DictationTab';$dictationTab.Text='Diktat'
+    $dictationLayout=New-Object Windows.Forms.FlowLayoutPanel
+    $dictationLayout.Dock='Fill';$dictationLayout.FlowDirection='TopDown';$dictationLayout.WrapContents=$false
+    $dictationLayout.Padding=[Windows.Forms.Padding]::new(16)
+    $dictationLabel=New-Object Windows.Forms.Label
+    $dictationLabel.Text='Lokale Engine fuer das naechste Diktat (Deutsch):';$dictationLabel.AutoSize=$true
+    $dictationChoice=New-Object Windows.Forms.ComboBox
+    $dictationChoice.Name='DictationEngine';$dictationChoice.DropDownStyle='DropDownList';$dictationChoice.Width=260
+    $dictationChoice.Items.AddRange(@('whisper.cpp (lokal)','Vosk (lokal)'))
+    $dictationChoice.SelectedIndex=if($working.DictationEngine -eq 'Vosk'){1}else{0}
+    $dictationReady=New-Object Windows.Forms.Label
+    $dictationReady.Name='DictationReadiness';$dictationReady.AutoSize=$true
+    $dictationInstall=New-Object Windows.Forms.Button
+    $dictationInstall.Name='InstallDictation';$dictationInstall.Text='Diktat-Komponenten installieren';$dictationInstall.AutoSize=$true
+    $dictationInstall.Add_Click({Start-TaskPloppDictationInstall})
+    $dictationInstallStatus=New-Object Windows.Forms.Label
+    $dictationInstallStatus.Name='DictationInstallStatus';$dictationInstallStatus.AutoSize=$true
+    $dictationInstallStatus.MaximumSize=[Drawing.Size]::new(700,0)
+    $dictationHelp=New-Object Windows.Forms.Label
+    $dictationHelp.AutoSize=$true
+    $dictationHelp.Text="Beide Engines und deutsche Modelle werden benutzerlokal eingerichtet.`r`nDownload etwa 220 MB; normalerweise keine Adminrechte erforderlich.`r`nEinrichtung gilt sofort, unabhaengig von Speichern/Abbrechen.`r`nEngine-Auswahl gilt nach Speichern fuer das naechste Diktat.`r`nMikrofon wird ueber Audio gewaehlt. Keine Cloud, kein Audioarchiv.`r`nErster Mikrofonklick: Aufnahme. Zweiter Klick: Transkription.`r`nRechtsklick auf Mikrofon: Verwerfen oder erneut kopieren."
+    $dictationLayout.Controls.AddRange(@($dictationLabel,$dictationChoice,$dictationReady,$dictationInstall,$dictationInstallStatus,$dictationHelp))
+    $dictationTab.Controls.Add($dictationLayout);[void]$tabs.TabPages.Add($dictationTab)
+    $dictationStatusTimer=New-Object Windows.Forms.Timer
+    $dictationStatusTimer.Interval=500
+    $updateDictationConfiguration={
+        $whisperReady=(Get-TaskPloppDictationPaths 'Whisper').Ready
+        $voskReady=(Get-TaskPloppDictationPaths 'Vosk').Ready
+        $dictationReady.Text="whisper.cpp: $(if($whisperReady){'Bereit'}else{'Nicht eingerichtet'})`r`nVosk: $(if($voskReady){'Bereit'}else{'Nicht eingerichtet'})"
+        $dictationInstall.Enabled=$script:DictationPhase -eq 'Ready' -and $null -eq $script:DictationInstaller
+        if($null -ne $script:DictationInstaller){
+            $dictationInstallStatus.Text=$script:DictationInstaller.LastLine
+            $dictationInstallStatus.ForeColor=[Drawing.Color]::DarkOrange
+        } elseif($script:DictationInstallError){
+            $dictationInstallStatus.Text=$script:DictationInstallError
+            $dictationInstallStatus.ForeColor=[Drawing.Color]::DarkRed
+        } else {
+            $dictationInstallStatus.Text=if($whisperReady -and $voskReady){'Beide Engines sind bereit.'}else{'Einrichtung ueber den Button starten.'}
+            $dictationInstallStatus.ForeColor=if($whisperReady -and $voskReady){[Drawing.Color]::DarkGreen}else{[Drawing.Color]::DarkOrange}
+        }
+    }
+    & $updateDictationConfiguration
+    $dictationStatusTimer.Add_Tick($updateDictationConfiguration)
+    $dictationStatusTimer.Start()
 
     $favoriteList = New-Object Windows.Forms.ListBox
     $favoriteList.Name = 'FavoriteList'
@@ -271,6 +316,7 @@ function Show-TaskPloppConfiguration {
             $working.ShowOpenWindows = [bool]$show.Checked
             $working.AutoLockEnabled=[bool]$lockEnabled.Checked
             $working.AutoLockMinutes=[int]$lockMinutes.Value
+            $working.DictationEngine=if($dictationChoice.SelectedIndex -eq 1){'Vosk'}else{'Whisper'}
             foreach ($entry in $working.Programs) {
                 $entry.Name = $entry.Name.Trim(); $entry.ProcessName = $entry.ProcessName.Trim()
                 if (-not $entry.Name -or -not $entry.ProcessName) { throw 'Bitte Buttonname und Programmkennung ausfuellen.' }
@@ -290,6 +336,6 @@ function Show-TaskPloppConfiguration {
     $editor.Enabled = $false
     if ($favoriteList.Items.Count -gt 0) { $favoriteList.SelectedIndex = 0 }
     if ($OnShown) { $dialog.Add_Shown($OnShown) }
-    try { [void]$dialog.ShowDialog($script:Main) } finally { $dialog.Dispose() }
+    try { [void]$dialog.ShowDialog($script:Main) } finally { $dictationStatusTimer.Dispose();$dialog.Dispose() }
     Show-TaskPloppView
 }

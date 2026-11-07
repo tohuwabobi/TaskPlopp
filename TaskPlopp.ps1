@@ -216,6 +216,7 @@ function Show-Notice([string]$Message) {
 . (Join-Path $PSScriptRoot 'TaskPlopp.Status.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Audio.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.IdleLock.ps1')
+. (Join-Path $PSScriptRoot 'TaskPlopp.Dictation.ps1')
 
 if ($LibraryOnly) { return }
 if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
@@ -262,6 +263,7 @@ try {
         $script:Main.Show()
         [TaskPlopp.Native]::Raise($script:Main.Handle)
         Show-TaskPloppView 'Tasks'
+        Show-TaskPloppDictationStatus
     }
 
     $top = New-Object Windows.Forms.TableLayoutPanel
@@ -443,6 +445,19 @@ try {
     } -Hint 'Automatische PC-Sperre' -Icon
     $script:LockButton.Name='AutoLockToggle'
     Apply-TaskPloppIdleSettings
+    $script:DictationButton=Add-ToolbarButton ([string][char]0xE720) { Invoke-TaskPloppDictation } -Hint 'Diktat starten' -Icon
+    $script:DictationButton.Name='DictationToggle'
+    $dictationMenu=New-Object Windows.Forms.ContextMenuStrip
+    $discardItem=$dictationMenu.Items.Add('Aufnahme verwerfen')
+    $discardItem.Add_Click({Stop-TaskPloppRecording -Discard})
+    $copyItem=$dictationMenu.Items.Add('Erneut in Zwischenablage kopieren')
+    $copyItem.Add_Click({Copy-TaskPloppDictationResult})
+    $dictationMenu.Add_Opening({
+        $discardItem.Enabled=$script:DictationPhase -eq 'Recording'
+        $copyItem.Enabled=[bool]$script:DictationPendingText
+    })
+    $script:DictationButton.ContextMenuStrip=$dictationMenu
+    Update-TaskPloppDictationButton
     $script:Main.add_BackRequested({ Show-TaskPloppView 'Tasks' })
     $script:ListPanel.Add_SizeChanged({
         foreach ($control in $script:ListPanel.Controls) {
@@ -486,6 +501,10 @@ try {
     if($OnShown) { $script:Main.Add_Shown($OnShown) }
     Update-WindowList
     $timer.Start()
+    $dictationTimer=New-Object Windows.Forms.Timer
+    $dictationTimer.Interval=100
+    $dictationTimer.Add_Tick({Invoke-TaskPloppDictationTick})
+    $dictationTimer.Start()
     $idleTimer=New-Object Windows.Forms.Timer
     $idleTimer.Interval=500
     $idleTimer.Add_Tick({ Invoke-TaskPloppIdleCheck })
@@ -519,6 +538,9 @@ try {
     }
     [Windows.Forms.Application]::Run($script:Main)
 } finally {
+    if(Get-Variable dictationTimer -ErrorAction SilentlyContinue){$dictationTimer.Dispose()}
+    Close-TaskPloppDictation
+    if(Get-Variable dictationMenu -ErrorAction SilentlyContinue){$dictationMenu.Dispose()}
     if (Get-Variable idleTimer -ErrorAction SilentlyContinue) { $idleTimer.Dispose() }
     if (Get-Variable HotkeyListener -Scope Script -ErrorAction SilentlyContinue) { $script:HotkeyListener.Dispose() }
     if (Get-Variable Tray -Scope Script -ErrorAction SilentlyContinue) {

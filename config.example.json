@@ -2,6 +2,7 @@
   "ShowOpenWindows": true,
   "AutoLockEnabled": true,
   "AutoLockMinutes": 30,
+  "DictationEngine": "Whisper",
   "Programs": [
     {
       "Name": "Explorer",
