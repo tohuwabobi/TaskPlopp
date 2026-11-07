@@ -424,3 +424,39 @@ Toolbargruppen und lange Ueberschriften bei kleiner/grosser Ansicht und Schrift.
 Er prueft Statusmeldungen statt Popups, sichtbare Konfigurationsfehler, Startupfehler
 und Abmeldung des GUI-Exceptionhandlers ohne Fremdfensteraktionen. Reale DPI- und
 Citrix-Pruefungen bleiben Praxisbelege.
+
+## KI-Fensterordner
+
+Der Fensterbutton direkt rechts vom Mikrofon startet die Aufnahme des Arbeitsziels.
+Beispiel: "Ich schreibe einen Bericht und brauche Chrome mit den Quellen neben dem Editor."
+Ein zweiter Klick beendet die Aufnahme. Die gewaehlte lokale Diktat-Engine transkribiert;
+anschliessend plant OpenAI mit Fenstertiteln, Monitorinformationen und Desktopbildern
+die Anordnung. Nur passende sichtbare lokale Fenster werden verschoben/vergroessert.
+Citrix selbst ist kein Ziel; Programme innerhalb von Citrix sind nicht separat steuerbar.
+Es werden keine Programme gestartet, Fenster geschlossen oder minimiert.
+
+Rechtsklick auf den Fensterbutton: **Letzte Anordnung rueckgaengig** oder einen
+laufenden Fensterauftrag abbrechen. Escape bricht Aufnahme, Transkription oder
+KI-Planung ab. Eine begonnene Anwendung/Undo wird kurz zu Ende gefuehrt; normales
+Schliessen wartet darauf. Nach Anwendung blendet TaskPlopp sich aus. Hinweise stehen
+weiter in der Statusleiste beim erneuten Oeffnen mit dem konfigurierten Hotkey.
+Es gibt genau einen Undo-Schritt im RAM, auch nach Teilerfolgen. Ein Neustart verwirft ihn.
+Windows-Mindestgroessen, Zugriffsrechte und dauerhaft oben liegende Fremdfenster
+koennen die gewuenschte Anordnung begrenzen; TaskPlopp meldet dies als Warnung.
+
+Unter **Konfiguration > Fensterordner** steht das OpenAI-Modell (Standard gpt-4.1-mini).
+Die API benoetigt einen passenden Projektzugriff und kann Kosten verursachen.
+Die vorhandene binaere Datei `%LOCALAPPDATA%\TaskPlopp\Secrets\OpenAI.dpapi` wird mit
+Windows-DPAPI fuer das aktuelle Benutzerkonto entschluesselt. Sie ist nicht Teil von
+Git oder Konfigurations-Exporten; weitere PCs benoetigen eine eigene Schluesselablage.
+Diktat bleibt lokal. Beim Fensterordner werden dagegen transkribierter Arbeitsauftrag,
+Fenstertitel und Bilder der Monitore an OpenAI gesendet (Responses API, store=false).
+Bilder und Schluessel bleiben lokal ausschliesslich im Worker-RAM, ohne Bildarchiv.
+Das normale Mikrofon-Diktat schreibt weiterhin nur Text in die Zwischenablage;
+der Fensterordner veraendert deren Inhalt nicht.
+
+`Test-TaskPloppWindowLayout.ps1` prueft den Vertrag und bewegt nur eigene Testfenster.
+Mit `-Api` kommen zwei echte API-Aufrufe ausschliesslich mit kuenstlichen Inhalten
+hinzu (Metadaten allein / mit selbst gezeichnetem Testbild). Reale Desktopbilder
+werden dabei nicht hochgeladen. Siehe `docs/Verifier_2026_11_08_KI_Fensterordner.md`.
+Eine bereits laufende TaskPlopp-Instanz muss zum Laden der neuen Version neu starten.

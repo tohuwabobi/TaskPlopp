@@ -72,12 +72,12 @@ function Set-TaskPloppMessage([string]$Kind,[string]$Summary,[string]$Detail='')
         Measure-TaskPloppMessage $p
     }
 }
-function Set-TaskPloppActivity([string]$Mode,[string]$Detail='') {
-    if($Mode-eq'Recording'){Set-TaskPloppMessage Success 'Diktat laeuft' $Detail}else{Set-TaskPloppMessage Notice 'Transkription laeuft' $Detail}
-    $s=$script:MessageBar.Tag;$s.Activity=$Mode;[Array]::Clear($s.Peaks,0,64);$s.Frame=0
+function Set-TaskPloppActivity([string]$Mode,[string]$Detail='',[string]$Caption='Diktat laeuft') {
+    if($Mode-eq'Recording'){Set-TaskPloppMessage Success $Caption $Detail}else{Set-TaskPloppMessage Notice 'Transkription laeuft' $Detail}
+    $s=$script:MessageBar.Tag;$s.Activity=$Mode;$s.Caption=$Caption;[Array]::Clear($s.Peaks,0,64);$s.Frame=0
 }
 function Update-TaskPloppActivity([single]$Peak,[double]$Seconds) {
     $s=$script:MessageBar.Tag;if(-not$s.Activity){return};$s.Frame++
-    if($s.Activity-eq'Recording'){$s.Lines[0]='Diktat laeuft - '+[TimeSpan]::FromSeconds($Seconds).ToString('hh\:mm\:ss');[Array]::Copy($s.Peaks,1,$s.Peaks,0,63);$s.Peaks[63]=$Peak}
+    if($s.Activity-eq'Recording'){$s.Lines[0]=$s.Caption+' - '+[TimeSpan]::FromSeconds($Seconds).ToString('hh\:mm\:ss');[Array]::Copy($s.Peaks,1,$s.Peaks,0,63);$s.Peaks[63]=$Peak}
     $script:MessageBar.Invalidate()
 }

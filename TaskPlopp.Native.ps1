@@ -47,6 +47,14 @@ $null=New-TaskPloppNativeType 'TaskPloppInterop.Kernel' 'kernel32.dll' @(
     @{Name='LoadLibraryExW';Return=[IntPtr];Args=@([string],[IntPtr],[uint32])},@{Name='FreeLibrary';Return=[bool];Args=@([IntPtr])}
 )
 $null=New-TaskPloppNativeType 'TaskPloppInterop.Dwm' 'dwmapi.dll' @(@{Name='DwmGetWindowAttribute';Return=[int];Args=@([IntPtr],[int],[int].MakeByRefType(),[int])})
+$null=New-TaskPloppNativeType 'TaskPloppInterop.Geometry' 'user32.dll' @(
+    @{Name='GetWindowRect';Return=[bool];Args=@([IntPtr],[IntPtr])},
+    @{Name='GetWindowPlacement';Return=[bool];Args=@([IntPtr],[IntPtr])},
+    @{Name='SetWindowPlacement';Return=[bool];Args=@([IntPtr],[IntPtr])},
+    @{Name='SetThreadDpiAwarenessContext';Return=[IntPtr];Args=@([IntPtr])},
+    @{Name='IsZoomed';Return=[bool];Args=@([IntPtr])})
+$null=New-TaskPloppNativeType 'TaskPloppInterop.Frame' 'dwmapi.dll' @(
+    @{Name='DwmGetWindowAttribute';Return=[int];Args=@([IntPtr],[int],[IntPtr],[int])})
 function Test-TaskPloppSwitchable([IntPtr]$Handle) {
     if(-not[TaskPloppInterop.User]::IsWindow($Handle)-or-not[TaskPloppInterop.User]::IsWindowVisible($Handle)){return $false}
     $style=if([IntPtr]::Size-eq8){[TaskPloppInterop.User]::GetWindowLongPtrW($Handle,-20).ToInt64()}else{[long][TaskPloppInterop.User]::GetWindowLongW($Handle,-20)}

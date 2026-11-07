@@ -1,4 +1,5 @@
-﻿# Local dictation only. No audio files, cloud calls or automatic text insertion.
+﻿# Local transcription; optional result dispatch to the separate window arranger.
+$script:DictationPurpose='Dictation'
 $script:DictationPhase='Ready'
 $script:DictationRecorder=$null
 $script:DictationJob=$null
@@ -181,7 +182,8 @@ function Get-TaskPloppDictationPaths([ValidateSet('Whisper','Vosk')][string]$Eng
 function Update-TaskPloppDictationButton {
     if(-not(Get-Variable DictationButton -Scope Script -ErrorAction SilentlyContinue)){return}
     $recording=$script:DictationPhase -eq 'Recording'
-    $script:DictationButton.Enabled=$script:DictationPhase -ne 'Transcribing' -and $null -eq $script:DictationInstaller -and ($null -eq $script:DictationRecorder -or -not $script:DictationRecorder.Disposed -or $script:DictationRecorder.Shared.Closed)
+    Update-TaskPloppLayoutButton
+    $script:DictationButton.Enabled=($null-eq$script:LayoutJob)-and-not($script:DictationPurpose-eq'Layout'-and$script:DictationPhase-ne'Ready')-and$script:DictationPhase -ne 'Transcribing' -and $null -eq $script:DictationInstaller -and ($null -eq $script:DictationRecorder -or -not $script:DictationRecorder.Disposed -or $script:DictationRecorder.Shared.Closed)
     $script:DictationButton.UseVisualStyleBackColor=$false
     $script:DictationButton.BackColor=if($recording){[Drawing.Color]::FromArgb(205,239,211)}else{[Drawing.Color]::FromArgb(240,240,240)}
     $hint=if($recording){'Aufnahme beenden und transkribieren (Rechtsklick: verwerfen)'}else{'Diktat starten'}
@@ -193,7 +195,7 @@ function Update-TaskPloppDictationButton {
     }
 }
 function Show-TaskPloppDictationStatus {
-    if($script:DictationPhase -eq 'Recording'){Set-TaskPloppActivity Recording}
+    if($script:DictationPhase -eq 'Recording'){$caption=if($script:DictationPurpose-eq'Layout'){'Sag mir, woran du arbeitest'}else{'Diktat laeuft'};Set-TaskPloppActivity Recording '' $caption}
     elseif($script:DictationPhase -eq 'Transcribing'){Set-TaskPloppActivity Transcribing $script:DictationEngine}
 }
 function Copy-TaskPloppDictationResult {
@@ -232,6 +234,8 @@ function Complete-TaskPloppRecording {
     finally{$shared.Pcm=$null;Update-TaskPloppDictationButton}
 }
 function Invoke-TaskPloppDictation {
+    param([ValidateSet('Dictation','Layout')][string]$Purpose='Dictation')
+    if($null-ne$script:LayoutJob-or($script:DictationPhase-ne'Ready'-and$script:DictationPurpose-ne$Purpose)){Set-TaskPloppMessage Notice 'TaskPlopp ist beschaeftigt' 'Bitte zuerst den laufenden Auftrag beenden.';return}
     if($script:DictationPhase -eq 'Recording'){Stop-TaskPloppRecording;return}
     if($script:DictationPhase -ne 'Ready' -or $null -ne $script:DictationInstaller){return}
     try {
@@ -241,7 +245,8 @@ function Invoke-TaskPloppDictation {
         Initialize-TaskPloppDictation;Initialize-TaskPloppAudio
         $endpoint=Get-TaskPloppAudioDefaultId 1 0
         $script:DictationRecorder=New-TaskPloppRecorder $endpoint
-        $script:DictationPendingText='';$script:DictationEngine=$engine
+        $script:DictationPurpose=$Purpose
+        if($Purpose-eq'Dictation'){$script:DictationPendingText=''};$script:DictationEngine=$engine
         $script:DictationEndpoint=$endpoint
         $script:DictationMaxPeak=0.0;$script:DictationDeviceCheck=0
         $script:DictationWatch=[Diagnostics.Stopwatch]::StartNew()
@@ -250,6 +255,7 @@ function Invoke-TaskPloppDictation {
     Update-TaskPloppDictationButton
 }
 function Start-TaskPloppDictationInstall {
+    if($null-ne$script:LayoutJob){Set-TaskPloppMessage Notice 'Fensterordner arbeitet' 'Einrichtung bitte danach starten.';return}
     if($script:DictationPhase -ne 'Ready' -or $null -ne $script:DictationInstaller){return}
     try {
         Initialize-TaskPloppDictation
@@ -290,6 +296,7 @@ function Invoke-TaskPloppDictationTick {
             Close-TaskPloppProcess $script:DictationJob;$script:DictationJob=$null;$script:DictationPhase='Ready'
             if($errorText){Set-TaskPloppMessage 'Error' 'Transkription fehlgeschlagen' $errorText}
             elseif([string]::IsNullOrWhiteSpace($text)){Set-TaskPloppMessage 'Notice' 'Kein Text erkannt' 'Zwischenablage bleibt erhalten. Mikrofon und Aufnahme pruefen.'}
+            elseif($script:DictationPurpose-eq'Layout'){Start-TaskPloppLayoutPlan $text}
             else {$script:DictationPendingText=$text;Copy-TaskPloppDictationResult}
             Update-TaskPloppDictationButton
         }

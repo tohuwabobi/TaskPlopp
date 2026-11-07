@@ -7,7 +7,7 @@ function ConvertFrom-TaskPloppTransferJson([string]$Json) {
         foreach($key in 'Name','ProcessName','TitleContains'){if($program.PSObject.Properties.Name-notcontains$key-or$program.$key-isnot[string]){throw "Ungueltiger Favorit: $key"}}
         if(-not$program.Name.Trim()-or-not$program.ProcessName.Trim()){throw 'Favorit ohne Name oder Programmkennung.'}
     }
-    $known=@('ShowOpenWindows','Programs','HiddenWindows','AutoLockEnabled','AutoLockMinutes','DictationEngine','HotkeyModifiers','HotkeyKey')
+    $known=@('ShowOpenWindows','Programs','HiddenWindows','AutoLockEnabled','AutoLockMinutes','DictationEngine','WindowLayoutModel','HotkeyModifiers','HotkeyKey')
     if(@($data.PSObject.Properties.Name|Where-Object{$_-notin$known}).Count){throw 'Unbekannte Konfigurationsfelder im Paket.'}
     ConvertTo-TaskPloppSettings $data
 }

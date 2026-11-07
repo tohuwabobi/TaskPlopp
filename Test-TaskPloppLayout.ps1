@@ -18,7 +18,7 @@ try{
             $bar=$sender.Controls.Find('Messages',$true)[0]
             $content=$sender.Controls.Find('TaskContent',$true)[0]
             $left=$sender.Controls.Find('ToolbarLeft',$true)[0];$right=$sender.Controls.Find('ToolbarRight',$true)[0]
-            Assert (($left.Controls.Name-join',')-eq'CitrixButton,AudioToggle,AutoLockToggle,DictationToggle') 'Linke Toolbargruppe falsch'
+            Assert (($left.Controls.Name-join',')-eq'CitrixButton,AudioToggle,AutoLockToggle,DictationToggle,WindowLayoutToggle') 'Linke Toolbargruppe falsch'
             Assert (($right.Controls.Name-join',')-eq'RefreshButton,ConfigurationButton') 'Rechte Toolbargruppe falsch'
             foreach($case in @(@(760,1200,10,3),@(420,350,10,30),@(420,350,15,30),@(420,350,15,0),@(760,1200,10,3))){
                 $sender.Font=[Drawing.Font]::new('Segoe UI',$case[2]);$sender.Size=[Drawing.Size]::new($case[0],$case[1])
@@ -35,8 +35,8 @@ try{
                 $toolbarButtons=@($left.Controls)+@($right.Controls)
                 $rects=@($toolbarButtons|ForEach-Object{Client-Bounds $_ $sender})
                 Assert (@($rects.Top|Select-Object -Unique).Count-eq1) 'Toolbar bricht um'
-                Assert ($rects[0].Left-eq10-and$rects[5].Right-eq$sender.ClientSize.Width-10) 'Toolbar falsch ausgerichtet'
-                Assert ($rects[4].Left-$rects[3].Right-ge12) 'Toolbargruppen ueberlappen'
+                Assert ($rects[0].Left-eq10-and$rects[6].Right-eq$sender.ClientSize.Width-10) 'Toolbar falsch ausgerichtet'
+                Assert ($rects[5].Left-$rects[4].Right-ge12) 'Toolbargruppen ueberlappen'
                 $top=$sender.Controls.Find('TopArea',$true)[0];$toolbar=$sender.Controls.Find('Toolbar',$true)[0]
                 Assert ($bar.Top-$toolbar.Bottom-eq3-and$top.ClientSize.Height-$bar.Bottom-eq3) 'Statusrahmen fehlt'
                 Write-Host "OK: Layout $($case[0])x$($case[1]), Font $($case[2]), $($case[3]) Favoriten, Inset $expected."

@@ -93,6 +93,7 @@ function Get-AppWindows {
 . (Join-Path $PSScriptRoot 'TaskPlopp.IdleLock.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Dictation.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Transfer.ps1')
+. (Join-Path $PSScriptRoot 'TaskPlopp.WindowLayout.ps1')
 
 if ($LibraryOnly) { return }
 if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
@@ -127,7 +128,7 @@ try {
     $script:Main.Text = 'TaskPlopp'
     $workArea = [Windows.Forms.Screen]::FromPoint([Windows.Forms.Cursor]::Position).WorkingArea
     $script:Main.Size = [Drawing.Size]::new([Math]::Min(760, $workArea.Width - 80), [Math]::Min(1200, $workArea.Height - 80))
-    $script:Main.MinimumSize = [Drawing.Size]::new(420, 350)
+    $script:Main.MinimumSize = [Drawing.Size]::new(460, 350)
     $script:Main.StartPosition = 'CenterScreen'
     $script:Main.TopMost = $true
     $script:Main.Font = [Drawing.Font]::new('Segoe UI', 15)
@@ -137,6 +138,8 @@ try {
     $script:CurrentView = 'Tasks'
     $script:IdleState=New-TaskPloppIdleState $script:Settings.AutoLockEnabled $script:Settings.AutoLockMinutes
     $script:Main.Add_FormClosing({ param($sender, $eventArgs)
+        if($null-ne$script:LayoutJob-and$script:LayoutMode-ne'Plan'){$eventArgs.Cancel=$true;$script:LayoutClosePending=$true;Set-TaskPloppMessage Notice 'Anordnung wird abgeschlossen' 'TaskPlopp schliesst danach.';return}
+        if($null-ne$script:LayoutJob){Cancel-TaskPloppWindowLayout}
         if (-not $SmokeTest -and -not $script:ExitRequested -and
             $eventArgs.CloseReason -eq [Windows.Forms.CloseReason]::UserClosing) {
             $eventArgs.Cancel = $true
@@ -145,6 +148,7 @@ try {
     })
 
     function Show-TaskPlopp {
+        if($script:LayoutCapturing){return}
         $transfer=Get-Variable TransferDialog -Scope Script -ValueOnly -ErrorAction SilentlyContinue
         if($transfer -and -not $transfer.IsDisposed){$transfer.Activate();return}
         $script:Main.Show()
@@ -372,6 +376,17 @@ try {
     $script:DictationButton.ContextMenuStrip=$dictationMenu
     Update-TaskPloppDictationButton
 
+    $script:LayoutButton=Add-ToolbarButton ([string][char]0xE8A9) {Invoke-TaskPloppWindowLayout} -Hint 'KI-Fensterordner' -Icon
+    $script:LayoutButton.Name='WindowLayoutToggle'
+    $layoutMenu=[Windows.Forms.ContextMenuStrip]::new()
+    $layoutUndoItem=$layoutMenu.Items.Add('Letzte Anordnung rueckgaengig')
+    $layoutUndoItem.Add_Click({Undo-TaskPloppWindowLayout})
+    $layoutCancelItem=$layoutMenu.Items.Add('Fensterauftrag abbrechen')
+    $layoutCancelItem.Add_Click({Cancel-TaskPloppWindowLayout})
+    $layoutMenu.Add_Opening({$layoutUndoItem.Enabled=$script:LayoutUndo.Count-gt0-and$null-eq$script:LayoutJob;$layoutCancelItem.Enabled=($script:LayoutMode-eq'Plan'-or($script:DictationPurpose-eq'Layout'-and$script:DictationPhase-ne'Ready'))})
+    $script:LayoutButton.ContextMenuStrip=$layoutMenu
+    $script:Main.Add_KeyDown({param($sender,$e) if($e.KeyCode-eq[Windows.Forms.Keys]::Escape-and($null-ne$script:LayoutJob-or($script:DictationPurpose-eq'Layout'-and$script:DictationPhase-ne'Ready'))){Cancel-TaskPloppWindowLayout;$e.Handled=$true;$e.SuppressKeyPress=$true}})
+    Update-TaskPloppLayoutButton
     $script:UpdatingContentLayout=$false
     function Update-TaskPloppContentLayout {
         if($script:UpdatingContentLayout){return}
@@ -439,7 +454,7 @@ try {
     $timer.Start()
     $dictationTimer=New-Object Windows.Forms.Timer
     $dictationTimer.Interval=100
-    $dictationTimer.Add_Tick({Invoke-TaskPloppDictationTick})
+    $dictationTimer.Add_Tick({Invoke-TaskPloppDictationTick;Invoke-TaskPloppLayoutTick})
     $dictationTimer.Start()
     $idleTimer=New-Object Windows.Forms.Timer
     $idleTimer.Interval=500
@@ -476,6 +491,8 @@ try {
 } finally {
     [Windows.Forms.Application]::remove_ThreadException($uiExceptionHandler)
     if(Get-Variable dictationTimer -ErrorAction SilentlyContinue){$dictationTimer.Dispose()}
+    Stop-TaskPloppLayoutProcess
+    if(Get-Variable layoutMenu -ErrorAction SilentlyContinue){$layoutMenu.Dispose()}
     Close-TaskPloppDictation
     if(Get-Variable transferMenu -ErrorAction SilentlyContinue){$transferMenu.Dispose()}
     if(Get-Variable dictationMenu -ErrorAction SilentlyContinue){$dictationMenu.Dispose()}

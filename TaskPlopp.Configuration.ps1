@@ -62,6 +62,7 @@ function Get-ShortcutProcessName([string]$Path) {
 
 function Show-TaskPloppConfiguration {
     param([scriptblock]$OnShown)
+    if($null-ne$script:LayoutJob){Set-TaskPloppMessage Notice 'Fensterordner arbeitet' 'Konfiguration bitte nach Abschluss oder Abbruch oeffnen.';return}
     # Edit a copy; cancellation never changes the live configuration.
     $working = ConvertTo-TaskPloppSettings ($script:Settings | ConvertTo-Json -Depth 8 | ConvertFrom-Json)
     $dialog = New-Object Windows.Forms.Form
@@ -139,6 +140,13 @@ function Show-TaskPloppConfiguration {
     & $updateDictationConfiguration
     $dictationStatusTimer.Add_Tick($updateDictationConfiguration)
     $dictationStatusTimer.Start()
+    $layoutTab=[Windows.Forms.TabPage]::new();$layoutTab.Text='Fensterordner';$layoutTab.Name='WindowLayoutTab'
+    $layoutSettings=[Windows.Forms.FlowLayoutPanel]::new();$layoutSettings.Dock='Fill';$layoutSettings.FlowDirection='TopDown';$layoutSettings.WrapContents=$false;$layoutSettings.AutoScroll=$true;$layoutSettings.Padding=[Windows.Forms.Padding]::new(16)
+    $layoutLabel=[Windows.Forms.Label]::new();$layoutLabel.AutoSize=$true;$layoutLabel.Text='OpenAI-Modell fuer den KI-Fensterordner:'
+    $layoutModel=[Windows.Forms.TextBox]::new();$layoutModel.Name='WindowLayoutModel';$layoutModel.Width=320;$layoutModel.Text=$working.WindowLayoutModel
+    $layoutHelp=[Windows.Forms.Label]::new();$layoutHelp.AutoSize=$true;$layoutHelp.MaximumSize=[Drawing.Size]::new(700,0)
+    $layoutHelp.Text="Erster Klick: Arbeitsziel sprechen. Zweiter Klick: Fenster anordnen.`r`nSprache wird lokal transkribiert. Desktopbilder und Fenstertitel werden`r`nan OpenAI gesendet; API-Nutzung kann Kosten verursachen.`r`nRechtsklick auf Fensterordner: letzte Anordnung rueckgaengig.`r`nSchluessel: %LOCALAPPDATA%\TaskPlopp\Secrets\OpenAI.dpapi`r`nBenutzergebunden; wird nicht exportiert. Keine Fenster werden geschlossen."
+    $layoutSettings.Controls.AddRange(@($layoutLabel,$layoutModel,$layoutHelp));$layoutTab.Controls.Add($layoutSettings);[void]$tabs.TabPages.Add($layoutTab)
     $hotkeyTab=New-Object Windows.Forms.TabPage
     $hotkeyTab.Name='HotkeyTab';$hotkeyTab.Text='Tastenkombination'
     $hotkeyLayout=New-Object Windows.Forms.FlowLayoutPanel
@@ -361,6 +369,7 @@ function Show-TaskPloppConfiguration {
             $working.ShowOpenWindows = [bool]$show.Checked
             $working.AutoLockEnabled=[bool]$lockEnabled.Checked
             $working.AutoLockMinutes=[int]$lockMinutes.Value
+            $working.WindowLayoutModel=$layoutModel.Text.Trim()
             $working.DictationEngine=if($dictationChoice.SelectedIndex -eq 1){'Vosk'}else{'Whisper'}
             $working.HotkeyModifiers=0
             foreach($check in $hotkeyChecks){if($check.Checked){$working.HotkeyModifiers=$working.HotkeyModifiers -bor [int]$check.Tag}}
