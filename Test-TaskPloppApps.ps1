@@ -104,7 +104,7 @@ public static class TaskPloppLaunchFixture {
     # Test editing through the actual modal dialog, with isolated settings.
     $script:Main = New-Object Windows.Forms.Form
     $script:Main.Font = [Drawing.Font]::new('Segoe UI',10)
-    function Update-WindowList { }
+    function Show-TaskPloppView { }
     $script:Settings.Programs = @($favorite, [pscustomobject]@{ Name='Explorer'; ProcessName='explorer'; TitleContains=''; ExecutablePath=''; AppId=''; StartKind='Path'; StartTarget=$explorer.Target })
     $script:UiFailure = $null
     Show-TaskPloppConfiguration -OnShown {

@@ -8,6 +8,8 @@ namespace TaskPlopp {
     public sealed class KeyboardForm : Form {
         private const string SelectionKeys = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         private readonly List<Button> selections = new List<Button>();
+        public bool AudioView { get; set; }
+        public event EventHandler BackRequested;
         public void ClearSelectionButtons() { selections.Clear(); }
         public void RegisterSelectionButton(Button button) {
             int index = selections.Count;
@@ -20,6 +22,10 @@ namespace TaskPlopp {
             // Preserve keyboard navigation while a button's context menu is open.
             foreach (Button candidate in selections) {
                 if (!candidate.IsDisposed && candidate.ContextMenuStrip != null && candidate.ContextMenuStrip.Visible) return false;
+            }
+            if (keyData == Keys.Escape && AudioView) {
+                if (BackRequested != null) BackRequested(this, EventArgs.Empty);
+                return true;
             }
             int code = (int)(keyData & Keys.KeyCode);
             char key;

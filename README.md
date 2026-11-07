@@ -40,6 +40,39 @@ powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\TaskPlopp.ps1
 
 ## Bedienung
 
+### Audio und Meldungen
+
+**Audio** in der oberen Leiste ersetzt die Taskbuttons im selben Fenster durch
+zwei Spalten: Lautsprecher und Mikrofone. Ein Klick oder die beschriftete Taste
+setzt das Geraet als Windows-Standard fuer Console, Multimedia und Kommunikation.
+Erfolg erscheint erst nach Ruecklesen aller drei Rollen. **[Aktiv]** bedeutet,
+dass alle Rollen dasselbe Geraet nutzen; andernfalls stehen die einzelnen Rollen
+an den jeweils verwendeten Geraeten. Zusammengehoerige Geraete erhalten dieselbe Farbe.
+
+**Aktualisieren** liest die gerade sichtbare Ansicht neu ein. Abgezogene Geraete
+verschwinden nach dem Aktualisieren; fehlende Standards und Lesefehler werden
+angezeigt. Ein Fehlversuch bleibt eine Fehlermeldung, auch wenn einzelne Rollen
+bereits umgestellt wurden. Es gibt keine automatische Rueckstellung.
+
+**Zurueck zu Tasks** oder **Escape** bringt die Favoriten mit ihren bisherigen
+Tasten zurueck. In einem offenen Kontextmenue schliesst Escape zuerst das Menue.
+Hotkey und Tray oeffnen immer die Tasks. Die Konfiguration kehrt dagegen zur
+vorherigen Ansicht zurueck. Audio veraendert keine gespeicherten Favoriten.
+
+Zwischen Toolbar und Inhalt liegt eine feste **zweizeilige Meldungsleiste**:
+Hinweise orange, Warnungen/Fehler rot und Erfolge gruen. Die erste Zeile nennt
+Art und Aussage, die zweite das Detail. Nur zu lange Texte laufen horizontal;
+es gibt dort keine Scrollbar. Eine neue Meldung ersetzt die alte, ohne Verlauf
+oder automatische Ablaufzeit. Bei verstecktem Fenster ruht die Laufschrift.
+Bestehende Meldungsboxen fuer Favoriten und Konfiguration bleiben erhalten.
+
+Die Audio-Core-Logik und Geraetefarben stammen aus dem lokalen TDAudioSwitch,
+liegen aber vollstaendig im TaskPlopp-Repository. COM-Signaturen wurden korrigiert;
+die alte CLI/GUI wird nicht gestartet. Keine Module und kein zweiter Prozess noetig.
+Windows-Standardgeraete sind keine per-App- oder Citrix-Geraeteeinstellungen.
+
+### Fenster und Favoriten
+
 - **Strg+Alt+F10** oeffnet TaskPlopp. Danach waehlen **1 bis 9**, **0**, anschliessend
   **A bis Z** den entsprechend beschrifteten Programm-/Fensterbutton direkt aus.
   Die Zahlen funktionieren auch auf dem Ziffernblock (Num an). Fuer Buchstaben
@@ -146,6 +179,8 @@ Herstellerhinweis: [Citrix-Tastaturverhalten](https://docs.citrix.com/en-us/citr
 
 ```powershell
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPlopp.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudio.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudioUi.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppApps.ps1 -StoreLaunch
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\TaskPlopp.ps1 -SmokeTest
 ```
@@ -160,6 +195,15 @@ Konfigurationsdialog mit temporaeren Einstellungen. `-StoreLaunch` startet
 zusaetzlich den Windows-Rechner, sofern kein Rechnerfenster offen ist. Nur ein
 dabei neu entstandener Rechnerprozess wird anschliessend geschlossen.
 Die Konfigurationsvorschau liegt unter `%TEMP%\TaskPlopp-configuration.png`.
+
+Der Audio-Test prueft COM-Signaturen, Variantenlayout, drei Rollen, Farben,
+Teilfehler und fehlende Geraete. Mit **-Hardware** schaltet er die echten Standards
+kurz um und stellt sie im finally-Block je Rolle wieder her. Der UI-Test prueft
+Ansichten, Meldungen/Laufschrift und kleine/grosse Schrift, ohne Geraete umzuschalten.
+Vorschauen: `%TEMP%\TaskPlopp-audio.png`, `TaskPlopp-audio-small.png` und
+`TaskPlopp-audio-large-font.png`. Ohne aktives Desktopfenster werden physische
+Tastatur-/Escape-Pruefungen ausdruecklich uebersprungen. Echte DPI-Skalierung,
+Hoer-/Mikrofonprobe und der Einsatz innerhalb von Citrix bleiben manuell zu pruefen.
 
 ## Symbol
 

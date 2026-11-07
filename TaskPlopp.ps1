@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 [CmdletBinding()]
-param([switch]$LibraryOnly, [switch]$SmokeTest, [switch]$ResidentTest)
+param([switch]$LibraryOnly, [switch]$SmokeTest, [switch]$ResidentTest, [scriptblock]$OnShown)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -213,6 +213,8 @@ function Show-Notice([string]$Message) {
 . (Join-Path $PSScriptRoot 'TaskPlopp.Apps.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Configuration.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Keyboard.ps1')
+. (Join-Path $PSScriptRoot 'TaskPlopp.Status.ps1')
+. (Join-Path $PSScriptRoot 'TaskPlopp.Audio.ps1')
 
 if ($LibraryOnly) { return }
 if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
@@ -245,6 +247,7 @@ try {
     $script:Main.Font = [Drawing.Font]::new('Segoe UI', 10)
     $script:Main.BackColor = [Drawing.Color]::FromArgb(245, 247, 250)
     $script:ExitRequested = $false
+    $script:CurrentView = 'Tasks'
     $script:Main.Add_FormClosing({ param($sender, $eventArgs)
         if (-not $SmokeTest -and -not $script:ExitRequested -and
             $eventArgs.CloseReason -eq [Windows.Forms.CloseReason]::UserClosing) {
@@ -256,22 +259,35 @@ try {
     function Show-TaskPlopp {
         $script:Main.Show()
         [TaskPlopp.Native]::Raise($script:Main.Handle)
-        Update-WindowList
+        Show-TaskPloppView 'Tasks'
     }
 
+    $top = New-Object Windows.Forms.TableLayoutPanel
+    $top.Name='TopArea'; $top.Dock='Top'; $top.AutoSize=$true; $top.AutoSizeMode='GrowAndShrink'
+    $top.ColumnCount=1; $top.RowCount=2; $top.Margin=[Windows.Forms.Padding]::new(0)
+    [void]$top.RowStyles.Add([Windows.Forms.RowStyle]::new([Windows.Forms.SizeType]::AutoSize))
+    [void]$top.RowStyles.Add([Windows.Forms.RowStyle]::new([Windows.Forms.SizeType]::AutoSize))
     $toolbar = New-Object Windows.Forms.FlowLayoutPanel
-    $toolbar.Dock = 'Top'; $toolbar.Height = 52; $toolbar.Padding = [Windows.Forms.Padding]::new(8)
+    $toolbar.Name='Toolbar'; $toolbar.Dock='Fill'; $toolbar.AutoSize=$true; $toolbar.AutoSizeMode='GrowAndShrink'
+    $toolbar.MinimumSize=[Drawing.Size]::new(0,52); $toolbar.Padding=[Windows.Forms.Padding]::new(8)
+    $toolbar.Margin=[Windows.Forms.Padding]::new(0)
+    $script:MessageBar = New-Object TaskPlopp.MessageBar
+    $script:MessageBar.Name='Messages'; $script:MessageBar.Dock='Fill'; $script:MessageBar.Margin=[Windows.Forms.Padding]::new(0)
+    $script:Main.Add_VisibleChanged({ $script:MessageBar.SetHostVisible($script:Main.Visible) })
+    $top.Controls.Add($toolbar,0,0); $top.Controls.Add($script:MessageBar,0,1)
     $script:ListPanel = New-Object Windows.Forms.FlowLayoutPanel
+    $script:ListPanel.Name='TaskContent'
     $script:ListPanel.Dock = 'Fill'; $script:ListPanel.AutoScroll = $true
     $script:ListPanel.FlowDirection = 'TopDown'; $script:ListPanel.WrapContents = $false
     $script:ListPanel.Padding = [Windows.Forms.Padding]::new(10)
     $script:Main.Controls.Add($script:ListPanel)
-    $script:Main.Controls.Add($toolbar)
+    $script:Main.Controls.Add($top)
 
     function Add-ToolbarButton([string]$Text, [scriptblock]$Action) {
         $button = New-Object Windows.Forms.Button
         $button.Text = $Text; $button.AutoSize = $true; $button.Height = 32
         $button.Add_Click($Action); $toolbar.Controls.Add($button)
+        return $button
     }
 
     function Open-Window($Window) {
@@ -394,17 +410,27 @@ try {
         } finally { $script:ListPanel.ResumeLayout() }
     }
 
-    Add-ToolbarButton 'Aktualisieren' { Update-WindowList }
-    Add-ToolbarButton 'Konfiguration' { Show-TaskPloppConfiguration }
-    Add-ToolbarButton 'Citrix minimieren' {
+    $null = Add-ToolbarButton 'Aktualisieren' { Show-TaskPloppView }
+    $null = Add-ToolbarButton 'Konfiguration' { Show-TaskPloppConfiguration }
+    $null = Add-ToolbarButton 'Citrix minimieren' {
         $citrix = @(Get-AppWindows -Raw | Where-Object { $_.ProcessName -in $script:CitrixProcesses })
         if ($citrix.Count -eq 0) { Show-Notice 'Kein sichtbares Citrix-Fenster gefunden.'; return }
         foreach ($window in $citrix) { [void][TaskPlopp.Native]::Minimize($window.Handle) }
         $script:Main.Close()
     }
-    $script:Main.Add_Resize({
+    $script:AudioButton = Add-ToolbarButton 'Audio' {
+        if ($script:CurrentView -eq 'Audio') { Show-TaskPloppView 'Tasks' }
+        else { Show-TaskPloppView 'Audio' }
+    }
+    $script:AudioButton.Name='AudioToggle'
+    $script:Main.add_BackRequested({ Show-TaskPloppView 'Tasks' })
+    $script:ListPanel.Add_SizeChanged({
         foreach ($control in $script:ListPanel.Controls) {
-            if ($control -is [Windows.Forms.Button]) { $control.Width = [Math]::Max(340, $script:ListPanel.ClientSize.Width - 42) }
+            if ($script:CurrentView -eq 'Tasks' -and $control -is [Windows.Forms.Button]) {
+                $control.Width = [Math]::Max(340, $script:ListPanel.ClientSize.Width - 42)
+            } elseif ($script:CurrentView -eq 'Audio' -and $control.Name -eq 'AudioColumns') {
+                $control.Size=[Drawing.Size]::new([Math]::Max(200,$script:ListPanel.ClientSize.Width-20),[Math]::Max(60,$script:ListPanel.ClientSize.Height-20))
+            }
         }
     })
     if (-not $SmokeTest -and -not $ResidentTest) {
@@ -437,6 +463,7 @@ try {
         }
     })
     $script:Main.Add_Shown({ [TaskPlopp.Native]::Raise($script:Main.Handle) })
+    if($OnShown) { $script:Main.Add_Shown($OnShown) }
     Update-WindowList
     $timer.Start()
     if ($SmokeTest -or $ResidentTest) {
