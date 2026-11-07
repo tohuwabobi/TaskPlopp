@@ -130,7 +130,7 @@ try {
     $script:Main.MinimumSize = [Drawing.Size]::new(420, 350)
     $script:Main.StartPosition = 'CenterScreen'
     $script:Main.TopMost = $true
-    $script:Main.Font = [Drawing.Font]::new('Segoe UI', 10)
+    $script:Main.Font = [Drawing.Font]::new('Segoe UI', 15)
     $script:Main.BackColor = [Drawing.Color]::FromArgb(245, 247, 250)
     $script:ExitRequested = $false
     $script:HotkeysEnabled=-not $SmokeTest -and -not $ResidentTest
@@ -190,7 +190,7 @@ try {
     function Add-ToolbarButton([string]$Text, [scriptblock]$Action, [string]$Hint, [switch]$Icon, [switch]$Right) {
         $button = New-Object Windows.Forms.Button
         $button.Text=$Text; $button.AutoSize=$false; $button.Height=34
-        $button.Width=if($Icon) { 42 } else { 64 }
+        $button.Width=if($Icon) { 42 } else { [Math]::Max(64,[Windows.Forms.TextRenderer]::MeasureText($Text,$script:Main.Font).Width+18) }
         if($Icon) { $button.Font=$script:ToolbarIconFont }
         $button.AccessibleName=$Hint
         $script:ToolbarToolTip.SetToolTip($button,$Hint)
@@ -244,7 +244,7 @@ try {
         $button = New-Object Windows.Forms.Button
         $button.Text = $Text; $button.Tag = [pscustomobject]@{ Target = $Target; IsFavorite = [bool]$Favorite }
         $script:Main.RegisterSelectionButton($button)
-        $button.Size = [Drawing.Size]::new([Math]::Max(1, $script:ListPanel.ClientSize.Width - $script:ListPanel.Padding.Horizontal), 48)
+        $button.Size = [Drawing.Size]::new([Math]::Max(1, $script:ListPanel.ClientSize.Width - $script:ListPanel.Padding.Horizontal), [Math]::Max(48,2*$script:Main.Font.Height+8))
         $button.Margin=[Windows.Forms.Padding]::new(0,3,0,3)
         $button.TextAlign = 'MiddleLeft'; $button.AutoEllipsis = $true
         $button.FlatStyle = 'Flat'; $button.BackColor = [Drawing.Color]::White
@@ -294,9 +294,14 @@ try {
         $script:ListPanel.Controls.Add($button)
     }
 
-    function Add-Heading([string]$Text) {
+    function Add-Heading([string]$Text,[switch]$Bold) {
         $label = New-Object Windows.Forms.Label
         $label.Text = $Text; $label.AutoSize = $true
+        if($Bold){
+            $label.Font=[Drawing.Font]::new($script:Main.Font,[Drawing.FontStyle]::Bold)
+            $label.Tag=$label.Font
+            $label.Add_Disposed({param($sender,$args) $sender.Tag.Dispose()})
+        }
         $label.Margin = [Windows.Forms.Padding]::new(0,12,0,8)
         $label.MaximumSize=[Drawing.Size]::new([Math]::Max(1,$script:ListPanel.ClientSize.Width-$script:ListPanel.Padding.Horizontal),0)
         $script:ListPanel.Controls.Add($label)
@@ -308,13 +313,13 @@ try {
             $script:Main.ClearSelectionButtons()
             while ($script:ListPanel.Controls.Count -gt 0) { $script:ListPanel.Controls[0].Dispose() }
             $windows = @(Get-AppWindows | Sort-Object ProcessName, Title)
-            Add-Heading 'Favoriten'
+            Add-Heading 'Favoriten' -Bold
             foreach ($spec in @(Get-FavoriteButtonSpecs $windows $script:Settings)) {
                 Add-WindowButton $spec.Text $spec.Favorite -Favorite -MatchingWindows $spec.Windows
             }
             if (@($script:Settings.Programs).Count -eq 0) { Add-Heading 'Favoriten ueber "Konfiguration" hinzufuegen.' }
             if ($script:Settings.ShowOpenWindows) {
-                Add-Heading 'Weitere Fenster (Rechtsklick: Favorit / ausblenden)'
+                Add-Heading 'Weitere Fenster (Rechtsklick: Favorit / ausblenden)' -Bold
                 $otherWindows = @(Get-OtherWindows $windows $script:Settings)
                 foreach ($item in $otherWindows) { Add-WindowButton "$(Get-AppDisplayName $item.ProcessName $item.AppId) | $($item.Title)" $item }
                 if ($otherWindows.Count -eq 0) { Add-Heading 'Keine weiteren Fenster.' }
@@ -381,7 +386,10 @@ try {
             $width=[Math]::Max(1,$script:ListPanel.ClientSize.Width-$script:ListPanel.Padding.Horizontal)
             foreach($control in $script:ListPanel.Controls){
                 if($script:CurrentView-eq'Tasks'){
-                    if($control-is[Windows.Forms.Button]){if($control.Width-ne$width){$control.Width=$width}}
+                    if($control-is[Windows.Forms.Button]){
+                        if($control.Width-ne$width){$control.Width=$width}
+                        $height=[Math]::Max(48,2*$script:Main.Font.Height+8);if($control.Height-ne$height){$control.Height=$height}
+                    }
                     elseif($control-is[Windows.Forms.Label]){$maximum=[Drawing.Size]::new($width,0);if($control.MaximumSize-ne$maximum){$control.MaximumSize=$maximum}}
                 }elseif($control.Name-eq'AudioColumns'){
                     $size=[Drawing.Size]::new($width,[Math]::Max(1,$script:ListPanel.ClientSize.Height-$script:ListPanel.Padding.Vertical))

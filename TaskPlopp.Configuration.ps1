@@ -18,6 +18,7 @@
     $actions.Controls.AddRange(@($ok,$cancel))
     $picker.Controls.Add($list); $picker.Controls.Add($actions)
     $picker.AcceptButton = $ok; $picker.CancelButton = $cancel
+    $picker.AutoScaleDimensions=[Drawing.SizeF]::new(7,17);$picker.AutoScaleMode='Font'
     try { if ($picker.ShowDialog($owner) -eq 'OK') { return $picker.Tag } }
     finally { $picker.Dispose() }
 }
@@ -191,7 +192,7 @@ function Show-TaskPloppConfiguration {
     $sortActions.Controls.AddRange(@($up,$down,$sortHint))
     $favoriteColumn.Controls.Add($favoriteList); $favoriteColumn.Controls.Add($sortActions)
     $editor = New-Object Windows.Forms.FlowLayoutPanel
-    $editor.Dock = 'Fill'; $editor.FlowDirection = 'TopDown'; $editor.WrapContents = $false
+    $editor.Dock = 'Fill'; $editor.FlowDirection = 'TopDown'; $editor.WrapContents = $false; $editor.AutoScroll=$true
     $editor.Padding = [Windows.Forms.Padding]::new(12)
     $nameBox = New-Object Windows.Forms.TextBox
     $nameBox.Name = 'FavoriteName'
@@ -393,6 +394,11 @@ function Show-TaskPloppConfiguration {
     $editor.Enabled = $false
     if ($favoriteList.Items.Count -gt 0) { $favoriteList.SelectedIndex = 0 }
     if ($OnShown) { $dialog.Add_Shown($OnShown) }
+    $dialog.AutoScaleDimensions=[Drawing.SizeF]::new(7,17);$dialog.AutoScaleMode='Font'
+    $dialog.PerformAutoScale()
+    $area=[Windows.Forms.Screen]::FromControl($script:Main).WorkingArea
+    $fit=[Drawing.Size]::new([Math]::Min($dialog.Width,$area.Width-40),[Math]::Min($dialog.Height,$area.Height-40))
+    $dialog.MinimumSize=$fit;$dialog.Size=$fit
     $script:ConfigurationOpen=$true
     try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
     Show-TaskPloppView

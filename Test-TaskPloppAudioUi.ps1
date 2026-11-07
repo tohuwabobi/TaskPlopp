@@ -62,6 +62,7 @@ $global:TaskPloppUiFailure=$null
         Show-TaskPloppConfiguration -OnShown { param($dialog,$args) $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick() }
         Assert $sender.AudioView 'Konfigurationsrueckkehr hat Audio verlassen.'
         Show-TaskPlopp
+        [Windows.Forms.Application]::DoEvents() # Finish the asynchronous restore before testing Hide.
         Assert (-not $sender.AudioView) 'Hotkey-/Tray-Rueckkehr oeffnet nicht Tasks.'
         Assert (@($content.Controls | Where-Object {$_ -is [Windows.Forms.Button]})[0].Text -eq $firstTask) 'Hotkey-Rueckkehr hat Favoritentaste veraendert.'
         Set-TaskPloppMessage Notice ('Langer Hinweis ' * 30) ('Langes Detail ' * 30)
