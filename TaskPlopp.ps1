@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 [CmdletBinding()]
-param([switch]$LibraryOnly, [switch]$SmokeTest, [switch]$ResidentTest, [scriptblock]$OnShown)
+param([switch]$LibraryOnly, [switch]$SmokeTest, [switch]$ResidentTest, [scriptblock]$OnShown, [string]$ConfigFile)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -132,7 +132,7 @@ namespace TaskPlopp {
 '@
 }
 
-$script:ConfigPath = Join-Path $PSScriptRoot 'config.json'
+$script:ConfigPath = if($ConfigFile) { [IO.Path]::GetFullPath($ConfigFile) } else { Join-Path $PSScriptRoot 'config.json' }
 $script:CitrixProcesses = @('wfica32', 'CDViewer', 'Citrix.DesktopViewer.App', 'SelfService', 'Receiver', 'CitrixWorkspaceApp')
 
 function Get-Settings {
@@ -215,6 +215,7 @@ function Show-Notice([string]$Message) {
 . (Join-Path $PSScriptRoot 'TaskPlopp.Keyboard.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Status.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Audio.ps1')
+. (Join-Path $PSScriptRoot 'TaskPlopp.IdleLock.ps1')
 
 if ($LibraryOnly) { return }
 if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
@@ -248,6 +249,7 @@ try {
     $script:Main.BackColor = [Drawing.Color]::FromArgb(245, 247, 250)
     $script:ExitRequested = $false
     $script:CurrentView = 'Tasks'
+    $script:IdleState=New-TaskPloppIdleState $script:Settings.AutoLockEnabled $script:Settings.AutoLockMinutes
     $script:Main.Add_FormClosing({ param($sender, $eventArgs)
         if (-not $SmokeTest -and -not $script:ExitRequested -and
             $eventArgs.CloseReason -eq [Windows.Forms.CloseReason]::UserClosing) {
@@ -430,6 +432,17 @@ try {
         else { Show-TaskPloppView 'Audio' }
     } -Hint 'Lautsprecher und Mikrofone auswaehlen'
     $script:AudioButton.Name='AudioToggle'
+    $script:LockButton=Add-ToolbarButton ([string][char]0xE72E) {
+        try {
+            $copy=ConvertTo-TaskPloppSettings ($script:Settings | ConvertTo-Json -Depth 8 | ConvertFrom-Json)
+            $copy.AutoLockEnabled=-not $copy.AutoLockEnabled
+            Save-Settings $copy
+            $script:Settings=$copy
+            Apply-TaskPloppIdleSettings -Notify
+        } catch { Set-TaskPloppMessage 'Error' 'Sperreinstellung konnte nicht gespeichert werden' $_.Exception.Message }
+    } -Hint 'Automatische PC-Sperre' -Icon
+    $script:LockButton.Name='AutoLockToggle'
+    Apply-TaskPloppIdleSettings
     $script:Main.add_BackRequested({ Show-TaskPloppView 'Tasks' })
     $script:ListPanel.Add_SizeChanged({
         foreach ($control in $script:ListPanel.Controls) {
@@ -473,6 +486,11 @@ try {
     if($OnShown) { $script:Main.Add_Shown($OnShown) }
     Update-WindowList
     $timer.Start()
+    $idleTimer=New-Object Windows.Forms.Timer
+    $idleTimer.Interval=500
+    $idleTimer.Add_Tick({ Invoke-TaskPloppIdleCheck })
+    # UI smoke tests must never lock the user's desktop.
+    if(-not $SmokeTest -and -not $ResidentTest) { $idleTimer.Start() }
     if ($SmokeTest -or $ResidentTest) {
         $smokeTimer = New-Object Windows.Forms.Timer
         $smokeTimer.Interval = 1200
@@ -501,6 +519,7 @@ try {
     }
     [Windows.Forms.Application]::Run($script:Main)
 } finally {
+    if (Get-Variable idleTimer -ErrorAction SilentlyContinue) { $idleTimer.Dispose() }
     if (Get-Variable HotkeyListener -Scope Script -ErrorAction SilentlyContinue) { $script:HotkeyListener.Dispose() }
     if (Get-Variable Tray -Scope Script -ErrorAction SilentlyContinue) {
         $script:Tray.Visible = $false

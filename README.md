@@ -77,7 +77,35 @@ liegen aber vollstaendig im TaskPlopp-Repository. COM-Signaturen wurden korrigie
 die alte CLI/GUI wird nicht gestartet. Keine Module und kein zweiter Prozess noetig.
 Windows-Standardgeraete sind keine per-App- oder Citrix-Geraeteeinstellungen.
 
-### Fenster und Favoriten
+### Automatische PC-Sperre
+
+TaskPlopp sperrt den PC standardmaessig nach **30 Minuten ohne erkannte Maus-/
+Tastaturaktivitaet**. Unter **Konfiguration > PC-Sperre** lassen sich Ein/Aus und
+**1 bis 480 Minuten** speichern. Der kompakte Schloss-Button oben schaltet dieselbe
+Einstellung direkt um: gruenes geschlossenes Schloss = aktiv, graues offenes
+Schloss = aus. Der Tooltip nennt Zustand und Frist. Aenderungen erscheinen in der
+Meldungsleiste. Windows-eigene Sperrvorgaben werden damit nicht veraendert.
+
+Beim Aktivieren, Aendern der Minuten und beim Programmstart beginnt die Frist neu.
+Unveraendertes Speichern anderer Einstellungen verlaengert sie nicht. Das X
+blendet TaskPlopp nur aus; die Ueberwachung bleibt aktiv. **TaskPlopp beenden** im
+Infobereich beendet auch die Zusatzsperre. Audio und Diktate pausieren sie nicht.
+
+Die Beobachtung verwendet wie das alte IdleLock-Skript Mausposition und gedrueckte
+Tasten, ergaenzt um den Windows-Eingabezeitstempel fuer kurze Eingaben zwischen
+Abfragen. Gemessen wird mit einer monotonen Uhr statt der veraenderbaren Wanduhr.
+Eingaben werden weder protokolliert noch gespeichert. Bei einem nicht verfuegbaren
+Eingabedesktop (etwa waehrend einer Sperre) wird nicht erneut gesperrt; mit der
+ersten wieder verfuegbaren Probe beginnt die Frist neu. Der Windows-Sperraufruf
+meldet nur die Anforderung, keine unabhaengig bestaetigte erfolgreiche Sperrung.
+
+Kein zusaetzlicher Prozess, kein Konsolenfenster und kein weiterer Autostart sind
+fuer diese Funktion noetig. Der bisherige geplante Task **User Idle Lock Without
+Windows Idle** wird bei der lokalen Umstellung deaktiviert/gestoppt. Seine Dateien
+unter `%LOCALAPPDATA%\IdleLock` bleiben als Rueckfallmoeglichkeit erhalten. Nicht
+beide Ueberwachungen gleichzeitig betreiben.
+
+### Fenster und Favoriten bedienen
 
 - **Strg+Alt+F10** oeffnet TaskPlopp. Danach waehlen **1 bis 9**, **0**, anschliessend
   **A bis Z** den entsprechend beschrifteten Programm-/Fensterbutton direkt aus.
@@ -187,6 +215,7 @@ Herstellerhinweis: [Citrix-Tastaturverhalten](https://docs.citrix.com/en-us/citr
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPlopp.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudio.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudioUi.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppIdleLock.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppApps.ps1 -StoreLaunch
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\TaskPlopp.ps1 -SmokeTest
 ```
@@ -210,6 +239,13 @@ Vorschauen: `%TEMP%\TaskPlopp-audio.png`, `TaskPlopp-audio-small.png` und
 `TaskPlopp-audio-large-font.png`. Ohne aktives Desktopfenster werden physische
 Tastatur-/Escape-Pruefungen ausdruecklich uebersprungen. Echte DPI-Skalierung,
 Hoer-/Mikrofonprobe und der Einsatz innerhalb von Citrix bleiben manuell zu pruefen.
+
+Der IdleLock-Test simuliert Zeit und Eingaben ohne echten Sperraufruf. Er prueft
+Minutenvalidierung, Migration alter Einstellungen, neue Frist bei Aenderungen,
+Toolbar-/Konfigurationssynchronisierung, Abbrechen und Lebensdauer des Timers.
+Die UI benutzt eine temporaere Konfiguration; ihre Vorschau steht unter
+`%TEMP%\TaskPlopp-idle-config.png`. Eine tatsaechliche PC-Sperre und das Verhalten
+bei Eingaben innerhalb von Citrix sind anschliessend lokal zu pruefen.
 
 ## Symbol
 

@@ -5,6 +5,17 @@ function Get-TextProperty($Object, [string]$Name) {
 }
 
 function ConvertTo-TaskPloppSettings($Data) {
+    if($Data.PSObject.Properties.Name -notcontains 'AutoLockEnabled') {
+        $Data | Add-Member -NotePropertyName AutoLockEnabled -NotePropertyValue $true
+    }
+    if($Data.PSObject.Properties.Name -notcontains 'AutoLockMinutes') {
+        $Data | Add-Member -NotePropertyName AutoLockMinutes -NotePropertyValue 30
+    }
+    if($Data.AutoLockEnabled -isnot [bool]) { throw 'Automatische Sperre: Ein/Aus muss ein Wahrheitswert sein.' }
+    if(($Data.AutoLockMinutes -isnot [int] -and $Data.AutoLockMinutes -isnot [long]) -or
+        $Data.AutoLockMinutes -lt 1 -or $Data.AutoLockMinutes -gt 480) {
+        throw 'Automatische Sperre: Bitte ganze Minuten zwischen 1 und 480 waehlen.'
+    }
     foreach ($entry in @($Data.Programs)) {
         foreach ($field in @('ExecutablePath', 'AppId', 'StartKind', 'StartTarget', 'FolderPath')) {
             if ($entry.PSObject.Properties.Name -notcontains $field) {

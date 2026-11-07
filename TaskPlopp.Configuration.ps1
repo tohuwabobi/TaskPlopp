@@ -64,7 +64,25 @@ function Show-TaskPloppConfiguration {
     $favoritesTab.Text = 'Favoriten'
     $hiddenTab = New-Object Windows.Forms.TabPage
     $hiddenTab.Text = 'Ausgeblendete Programme'
-    $tabs.TabPages.AddRange(@($favoritesTab,$hiddenTab))
+    $lockTab=New-Object Windows.Forms.TabPage
+    $lockTab.Name='AutoLockTab'; $lockTab.Text='PC-Sperre'
+    $lockLayout=New-Object Windows.Forms.FlowLayoutPanel
+    $lockLayout.Dock='Fill'; $lockLayout.FlowDirection='TopDown'; $lockLayout.WrapContents=$false
+    $lockLayout.Padding=[Windows.Forms.Padding]::new(16)
+    $lockEnabled=New-Object Windows.Forms.CheckBox
+    $lockEnabled.Name='AutoLockEnabled'; $lockEnabled.Text='Automatische PC-Sperre aktivieren'
+    $lockEnabled.AutoSize=$true; $lockEnabled.Checked=$working.AutoLockEnabled
+    $lockLabel=New-Object Windows.Forms.Label
+    $lockLabel.Text='Sperren nach Minuten ohne Maus-/Tastaturaktivitaet:'; $lockLabel.AutoSize=$true
+    $lockMinutes=New-Object Windows.Forms.NumericUpDown
+    $lockMinutes.Name='AutoLockMinutes'; $lockMinutes.Minimum=1; $lockMinutes.Maximum=480
+    $lockMinutes.Value=$working.AutoLockMinutes; $lockMinutes.Width=100
+    $lockHelp=New-Object Windows.Forms.Label
+    $lockHelp.Size=[Drawing.Size]::new(700,110)
+    $lockHelp.Text="Beim Aktivieren oder Aendern der Minuten beginnt die Frist neu.`r`nDas X blendet TaskPlopp aus; die Ueberwachung laeuft weiter.`r`nErst 'TaskPlopp beenden' im Infobereich beendet auch die Ueberwachung.`r`nWindows-eigene Sperrvorgaben bleiben unveraendert. Audio/Diktate pausieren die Sperre nicht."
+    $lockLayout.Controls.AddRange(@($lockEnabled,$lockLabel,$lockMinutes,$lockHelp))
+    $lockTab.Controls.Add($lockLayout)
+    $tabs.TabPages.AddRange(@($favoritesTab,$hiddenTab,$lockTab))
 
     $favoriteList = New-Object Windows.Forms.ListBox
     $favoriteList.Name = 'FavoriteList'
@@ -251,6 +269,8 @@ function Show-TaskPloppConfiguration {
             $working.Programs = @($favoriteList.Items | ForEach-Object { $_ })
             $working.HiddenWindows = @($hidden.Items | ForEach-Object { $_ })
             $working.ShowOpenWindows = [bool]$show.Checked
+            $working.AutoLockEnabled=[bool]$lockEnabled.Checked
+            $working.AutoLockMinutes=[int]$lockMinutes.Value
             foreach ($entry in $working.Programs) {
                 $entry.Name = $entry.Name.Trim(); $entry.ProcessName = $entry.ProcessName.Trim()
                 if (-not $entry.Name -or -not $entry.ProcessName) { throw 'Bitte Buttonname und Programmkennung ausfuellen.' }
@@ -260,7 +280,9 @@ function Show-TaskPloppConfiguration {
                 }
             }
             Save-Settings $working
-            $script:Settings = $working; $dialog.DialogResult = 'OK'
+            $script:Settings = $working
+            Apply-TaskPloppIdleSettings -Notify
+            $dialog.DialogResult = 'OK'
         } catch { Show-Notice $_.Exception.Message }
     })
     $footer.Controls.AddRange(@($show,$save,$cancel))
