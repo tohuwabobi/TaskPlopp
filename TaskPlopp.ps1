@@ -8,129 +8,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-if (-not ('TaskPlopp.Native' -as [type])) {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Text;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-namespace TaskPlopp {
-    public class Window {
-        public IntPtr Handle;
-        public int ProcessId;
-        public string Title;
-    }
-    public static class Native {
-        private delegate bool EnumProc(IntPtr h, IntPtr p);
-        [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc callback, IntPtr p);
-        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr h);
-        [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
-        [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out int id);
-        [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr h, int command);
-        [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr h, int command);
-        [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
-        [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr h);
-        [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-        [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr h, uint flag);
-        [DllImport("user32.dll")] private static extern IntPtr GetLastActivePopup(IntPtr h);
-        [DllImport("user32.dll", EntryPoint="GetWindowLong")] private static extern int GetWindowLong32(IntPtr h, int index);
-        [DllImport("user32.dll", EntryPoint="GetWindowLongPtr")] private static extern IntPtr GetWindowLong64(IntPtr h, int index);
-        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr h, int attribute, out int value, int size);
-        [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint access, bool inherit, int id);
-        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
-        [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] private static extern int GetApplicationUserModelId(IntPtr process, ref uint length, StringBuilder appId);
-        [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumProc callback, IntPtr p);
-        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int height, uint flags);
-        public static bool IsSwitchable(IntPtr h) {
-            if (!IsWindow(h) || !IsWindowVisible(h)) return false;
-            long style = IntPtr.Size == 8 ? GetWindowLong64(h, -20).ToInt64() : GetWindowLong32(h, -20);
-            if ((style & 0x08000000L) != 0) return false;
-            if ((style & 0x00000080L) != 0 && (style & 0x00040000L) == 0) return false;
-            int cloaked;
-            if (DwmGetWindowAttribute(h, 14, out cloaked, 4) == 0 && cloaked != 0) return false;
-            if ((style & 0x00040000L) != 0) return true;
-            IntPtr walk = GetAncestor(h, 3);
-            for (int i=0; i<100; i++) {
-                IntPtr popup = GetLastActivePopup(walk);
-                if (popup == IntPtr.Zero || popup == walk) break;
-                if (IsWindowVisible(popup)) { walk = popup; break; }
-                walk = popup;
-            }
-            return walk == h;
-        }
-        public static string AppId(int processId) {
-            IntPtr process = OpenProcess(0x1000, false, processId);
-            if (process == IntPtr.Zero) return "";
-            try {
-                uint length = 0;
-                if (GetApplicationUserModelId(process, ref length, null) != 122 || length == 0) return "";
-                var value = new StringBuilder((int)length);
-                return GetApplicationUserModelId(process, ref length, value) == 0 ? value.ToString() : "";
-            } finally { CloseHandle(process); }
-        }
-        public static int HostedAppProcessId(IntPtr window, int hostProcessId) {
-            int result = hostProcessId;
-            EnumChildWindows(window, delegate(IntPtr child, IntPtr p) {
-                int id; GetWindowThreadProcessId(child, out id);
-                if (id != hostProcessId && AppId(id).Length > 0) { result=id; return false; }
-                return true;
-            }, IntPtr.Zero);
-            return result;
-        }
-        public static Window[] List() {
-            var list = new List<Window>();
-            EnumWindows(delegate(IntPtr h, IntPtr p) {
-                if (!IsWindowVisible(h)) return true;
-                var title = new StringBuilder(2048);
-                if (GetWindowText(h, title, title.Capacity) == 0) return true;
-                int id; GetWindowThreadProcessId(h, out id);
-                list.Add(new Window { Handle=h, ProcessId=id, Title=title.ToString() });
-                return true;
-            }, IntPtr.Zero);
-            return list.ToArray();
-        }
-        public static bool Activate(IntPtr h) {
-            if (!IsWindow(h)) return false;
-            if (IsIconic(h)) {
-                ShowWindowAsync(h, 9);
-                for (int i=0; i<20 && IsIconic(h); i++) System.Threading.Thread.Sleep(10);
-            }
-            SetForegroundWindow(h);
-            for (int i=0; i<20; i++) {
-                if (GetForegroundWindow() == h) return true;
-                System.Threading.Thread.Sleep(10);
-            }
-            return false;
-        }
-        public static bool Minimize(IntPtr h) {
-            if (!IsWindow(h)) return false;
-            int processId;
-            if (GetWindowThreadProcessId(h, out processId) == GetCurrentThreadId()) ShowWindow(h, 6);
-            else ShowWindowAsync(h, 6);
-            for (int i=0; i<30; i++) {
-                if (!IsWindow(h) || IsIconic(h)) return true;
-                System.Threading.Thread.Sleep(10);
-            }
-            return false;
-        }
-        public static bool ActivateWithCoverWindows(IntPtr target, IntPtr[] covers) {
-            if (!IsWindow(target)) return false;
-            foreach (IntPtr cover in covers) {
-                if (cover != target && IsWindow(cover) && !Minimize(cover)) return false;
-            }
-            return Activate(target);
-        }
-        public static void Raise(IntPtr h) {
-            ShowWindowAsync(h, 9);
-            SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x43);
-            SetForegroundWindow(h);
-        }
-    }
-}
-'@
-}
+. (Join-Path $PSScriptRoot 'TaskPlopp.Native.ps1')
 
 $script:ConfigPath = if($ConfigFile) { [IO.Path]::GetFullPath($ConfigFile) } else { Join-Path $PSScriptRoot 'config.json' }
 $script:CitrixProcesses = @('wfica32', 'CDViewer', 'Citrix.DesktopViewer.App', 'SelfService', 'Receiver', 'CitrixWorkspaceApp')
@@ -176,19 +54,19 @@ function Get-AppWindows {
     param([switch]$Raw)
     $cache = @{}
     $folderPaths = $null
-    foreach ($window in [TaskPlopp.Native]::List()) {
+    foreach ($window in (Get-TaskPloppNativeWindows)) {
         if ($window.ProcessId -eq $PID) { continue }
-        if (-not $Raw -and -not [TaskPlopp.Native]::IsSwitchable($window.Handle)) { continue }
+        if (-not $Raw -and -not (Test-TaskPloppSwitchable $window.Handle)) { continue }
         $processId = $window.ProcessId
         try {
             $process = Get-Process -Id $processId -ErrorAction Stop
             if ($process.ProcessName -eq 'ApplicationFrameHost') {
-                $processId = [TaskPlopp.Native]::HostedAppProcessId($window.Handle, $processId)
+                $processId = (Get-TaskPloppHostedProcess $window.Handle $processId)
                 $process = Get-Process -Id $processId -ErrorAction Stop
             }
             if (-not $cache.ContainsKey($processId)) {
                 $path = ''; try { $path = [string]$process.Path } catch { }
-                $cache[$processId] = @{ Path = $path; AppId = [TaskPlopp.Native]::AppId($processId) }
+                $cache[$processId] = @{ Path = $path; AppId = (Get-TaskPloppAppId $processId) }
             }
         } catch { continue }
         if ($window.Title -eq 'Program Manager') { continue }
@@ -218,6 +96,7 @@ function Show-Notice([string]$Message) {
 . (Join-Path $PSScriptRoot 'TaskPlopp.Audio.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.IdleLock.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Dictation.ps1')
+. (Join-Path $PSScriptRoot 'TaskPlopp.Transfer.ps1')
 
 if ($LibraryOnly) { return }
 if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
@@ -240,7 +119,8 @@ try {
         $script:Settings = ConvertTo-TaskPloppSettings ([pscustomobject]@{ ShowOpenWindows = $true; Programs = @() })
     }
     $script:AppIcon = [Drawing.Icon]::new((Join-Path $PSScriptRoot 'assets\TaskPlopp.ico'))
-    $script:Main = New-Object TaskPlopp.KeyboardForm
+    $script:Main = New-Object Windows.Forms.Form
+    Initialize-TaskPloppKeyboard $script:Main
     $script:Main.Icon = $script:AppIcon
     $script:Main.Text = 'TaskPlopp'
     $script:Main.Size = [Drawing.Size]::new(580, 650)
@@ -262,8 +142,10 @@ try {
     })
 
     function Show-TaskPlopp {
+        $transfer=Get-Variable TransferDialog -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if($transfer -and -not $transfer.IsDisposed){$transfer.Activate();return}
         $script:Main.Show()
-        [TaskPlopp.Native]::Raise($script:Main.Handle)
+        Raise-TaskPloppWindow $script:Main.Handle
         Show-TaskPloppView 'Tasks'
         Show-TaskPloppDictationStatus
     }
@@ -280,9 +162,9 @@ try {
     $script:ToolbarToolTip=New-Object Windows.Forms.ToolTip
     $script:ToolbarToolTip.ShowAlways=$true
     $script:ToolbarIconFont=[Drawing.Font]::new('Segoe MDL2 Assets',14)
-    $script:MessageBar = New-Object TaskPlopp.MessageBar
+    $script:MessageBar = New-TaskPloppMessageBar
     $script:MessageBar.Name='Messages'; $script:MessageBar.Dock='Fill'; $script:MessageBar.Margin=[Windows.Forms.Padding]::new(0)
-    $script:Main.Add_VisibleChanged({ $script:MessageBar.SetHostVisible($script:Main.Visible) })
+    $script:Main.Add_VisibleChanged({ Set-TaskPloppStatusHostVisible $script:Main.Visible })
     $top.Controls.Add($toolbar,0,0); $top.Controls.Add($script:MessageBar,0,1)
     $script:ListPanel = New-Object Windows.Forms.FlowLayoutPanel
     $script:ListPanel.Name='TaskContent'
@@ -304,7 +186,7 @@ try {
     }
 
     function Open-Window($Window) {
-        if (-not [TaskPlopp.Native]::IsWindow($Window.Handle)) {
+        if (-not [TaskPloppInterop.User]::IsWindow($Window.Handle)) {
             Show-Notice 'Dieses Fenster wurde inzwischen geschlossen.'
             Update-WindowList
             return
@@ -317,7 +199,7 @@ try {
                 $_.ProcessName -in $script:CitrixProcesses
             } | ForEach-Object { $_.Handle })
         }
-        if ([TaskPlopp.Native]::ActivateWithCoverWindows($Window.Handle, $covers)) {
+        if ((Activate-TaskPloppCoveredWindow $Window.Handle $covers)) {
             $script:Main.Hide()
         } else {
             Show-Notice 'Das Fenster konnte nicht sichtbar aktiviert werden. Eventuell blockiert ein erhoehtes Programm den Wechsel. Bitte Fensterliste aktualisieren und erneut versuchen.'
@@ -337,7 +219,7 @@ try {
         # Validate before minimizing Citrix; missing files should leave the desktop untouched.
         $null = Start-FavoriteApplication $Favorite -Preview
         foreach ($citrix in @(Get-AppWindows -Raw | Where-Object { $_.ProcessName -in $script:CitrixProcesses })) {
-            if (-not [TaskPlopp.Native]::Minimize($citrix.Handle)) { throw 'Citrix konnte nicht minimiert werden.' }
+            if (-not (Minimize-TaskPloppWindow $citrix.Handle)) { throw 'Citrix konnte nicht minimiert werden.' }
         }
         Start-FavoriteApplication $Favorite
         $script:Main.Hide()
@@ -424,11 +306,16 @@ try {
     }
 
     $null = Add-ToolbarButton ([string][char]0xE72C) { Show-TaskPloppView } -Hint 'Aktuelle Ansicht aktualisieren' -Icon
-    $null = Add-ToolbarButton ([string][char]0xE713) { Show-TaskPloppConfiguration } -Hint 'Konfiguration oeffnen' -Icon
+    $script:ConfigurationButton = Add-ToolbarButton ([string][char]0xE713) { Show-TaskPloppConfiguration } -Hint 'Konfiguration oeffnen (Rechtsklick: sichern/uebertragen)' -Icon
+    $script:ConfigurationButton.Name='ConfigurationButton'
+    $transferMenu=[Windows.Forms.ContextMenuStrip]::new()
+    $transferItem=$transferMenu.Items.Add('Konfiguration sichern/uebertragen')
+    $transferItem.Add_Click({Show-TaskPloppTransfer})
+    $script:ConfigurationButton.ContextMenuStrip=$transferMenu
     $null = Add-ToolbarButton 'Citrix' {
         $citrix = @(Get-AppWindows -Raw | Where-Object { $_.ProcessName -in $script:CitrixProcesses })
         if ($citrix.Count -eq 0) { Show-Notice 'Kein sichtbares Citrix-Fenster gefunden.'; return }
-        foreach ($window in $citrix) { [void][TaskPlopp.Native]::Minimize($window.Handle) }
+        foreach ($window in $citrix) { $null=Minimize-TaskPloppWindow $window.Handle }
         $script:Main.Close()
     } -Hint 'Citrix-Fenster minimieren'
     $script:AudioButton = Add-ToolbarButton 'Audio' {
@@ -460,7 +347,7 @@ try {
     })
     $script:DictationButton.ContextMenuStrip=$dictationMenu
     Update-TaskPloppDictationButton
-    $script:Main.add_BackRequested({ Show-TaskPloppView 'Tasks' })
+
     $script:ListPanel.Add_SizeChanged({
         foreach ($control in $script:ListPanel.Controls) {
             if ($script:CurrentView -eq 'Tasks' -and $control -is [Windows.Forms.Button]) {
@@ -478,6 +365,8 @@ try {
         $menu = New-Object Windows.Forms.ContextMenuStrip
         $openItem = $menu.Items.Add('TaskPlopp oeffnen')
         $openItem.Add_Click({ Show-TaskPlopp })
+        $transferTrayItem=$menu.Items.Add('Konfiguration sichern/uebertragen')
+        $transferTrayItem.Add_Click({Show-TaskPloppTransfer})
         $exitItem = $menu.Items.Add('TaskPlopp beenden')
         $exitItem.Add_Click({ $script:ExitRequested = $true; $script:Main.Close() })
         $script:Tray.ContextMenuStrip = $menu
@@ -498,7 +387,7 @@ try {
             Show-TaskPlopp
         }
     })
-    $script:Main.Add_Shown({ [TaskPlopp.Native]::Raise($script:Main.Handle) })
+    $script:Main.Add_Shown({ Raise-TaskPloppWindow $script:Main.Handle })
     if($OnShown) { $script:Main.Add_Shown($OnShown) }
     Update-WindowList
     $timer.Start()
@@ -541,6 +430,7 @@ try {
 } finally {
     if(Get-Variable dictationTimer -ErrorAction SilentlyContinue){$dictationTimer.Dispose()}
     Close-TaskPloppDictation
+    if(Get-Variable transferMenu -ErrorAction SilentlyContinue){$transferMenu.Dispose()}
     if(Get-Variable dictationMenu -ErrorAction SilentlyContinue){$dictationMenu.Dispose()}
     if (Get-Variable idleTimer -ErrorAction SilentlyContinue) { $idleTimer.Dispose() }
     $registeredHotkey=Get-Variable HotkeyListener -Scope Script -ValueOnly -ErrorAction SilentlyContinue

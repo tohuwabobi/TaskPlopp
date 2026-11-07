@@ -29,13 +29,6 @@ try {
 } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
 Write-Output 'OK: Chrome hspwo.de auf 1, Mein Chrome auf 2; korrekte Profilargumente. Downloads auf 3 und Desktop auf 4 mit lokalen Ordnerpfaden.'
 if($OpenFolders) {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class TaskPloppLocalTestClose {
-    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint message, IntPtr w, IntPtr l);
-}
-'@
     foreach($name in @('Downloads','Desktop')) {
         $entry=$settings.Programs | Where-Object Name -eq $name | Select-Object -First 1
         $before=@(Get-AppWindows)
@@ -54,7 +47,7 @@ public static class TaskPloppLocalTestClose {
             # Close only new, precisely matched windows created by this test, never an Explorer process.
             foreach($window in $matches) {
                 if($window.Handle -notin @($before | ForEach-Object Handle)) {
-                    [void][TaskPloppLocalTestClose]::PostMessage($window.Handle,0x10,[IntPtr]::Zero,[IntPtr]::Zero)
+                    [void][TaskPloppInterop.User]::PostMessageW($window.Handle,0x10,[IntPtr]::Zero,[IntPtr]::Zero)
                 }
             }
         }

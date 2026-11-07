@@ -1,113 +1,75 @@
-﻿if (-not ('TaskPlopp.MessageBar' -as [type])) {
-    Add-Type -ReferencedAssemblies System.Windows.Forms,System.Drawing -TypeDefinition @'
-using System;
-using System.Drawing;
-using System.Windows.Forms;
-namespace TaskPlopp {
-    public sealed class MessageBar : Control {
-        private readonly string[] lines = { "", "" };
-        private readonly float[] widths = new float[2];
-        private readonly float[] offsets = new float[2];
-        private readonly Timer timer;
-        private string activity = "";
-        private readonly float[] peaks = new float[64];
-        private int frame;
-        public void SetActivity(string mode, string detail) {
-            SetMessage(mode == "Recording" ? "Success" : "Notice",
-                mode == "Recording" ? "Diktat laeuft" : "Transkription laeuft",detail);
-            activity=mode; Array.Clear(peaks,0,peaks.Length); frame=0;
-        }
-        public void UpdateActivity(float peak, double seconds) {
-            if(activity=="") return;
-            frame++;
-            if(activity=="Recording") {
-                lines[0]="Diktat laeuft - " + TimeSpan.FromSeconds(seconds).ToString(@"hh\:mm\:ss");
-                Array.Copy(peaks,1,peaks,0,peaks.Length-1); peaks[peaks.Length-1]=peak;
-            }
-            Invalidate();
-        }
-        public bool IsScrolling { get { return timer.Enabled; } }
-        public void SetHostVisible(bool visible) {
-            if (visible) MeasureLines(); else timer.Stop();
-        }
-        public MessageBar() {
-            DoubleBuffered = true;
-            SetStyle(ControlStyles.ResizeRedraw, true);
-            timer = new Timer { Interval = 30 };
-            timer.Tick += delegate {
-                for (int i=0; i<2; i++) {
-                    if (widths[i] > ClientSize.Width - 16) offsets[i] = (offsets[i] + 1.5f) % (widths[i] + 48);
+﻿# Two lines, drawn by a normal Panel. All drawing stays on the GUI thread.
+function New-TaskPloppMessageBar {
+    $panel=[Windows.Forms.Panel]::new()
+    [Windows.Forms.Control].GetProperty('DoubleBuffered',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($panel,$true,$null)
+    $timer=[Windows.Forms.Timer]::new();$timer.Interval=30
+    $panel.Tag=@{Lines=@('','');Widths=@(0.0,0.0);Offsets=@(0.0,0.0);Activity='';Peaks=[single[]]::new(64);Frame=0;Timer=$timer;HostVisible=$true}
+    $panel | Add-Member ScriptProperty IsScrolling {$this.Tag.Timer.Enabled}
+    $panel.ForeColor=[Drawing.Color]::FromArgb(30,30,30)
+    $timer.Tag=$panel
+    $timer.Add_Tick({param($sender,$eventArgs)
+        $p=$sender.Tag;$s=$p.Tag
+        for($i=0;$i-lt2;$i++){if($s.Widths[$i]-gt$p.ClientSize.Width-16){$s.Offsets[$i]=($s.Offsets[$i]+1.5)%($s.Widths[$i]+48)}}
+        $p.Invalidate()
+    })
+    $panel.Add_FontChanged({param($sender,$e) Measure-TaskPloppMessage $sender})
+    $panel.Add_SizeChanged({param($sender,$e) Measure-TaskPloppMessage $sender})
+    $panel.Add_VisibleChanged({param($sender,$e) Measure-TaskPloppMessage $sender})
+    $panel.Add_Disposed({param($sender,$e) $sender.Tag.Timer.Dispose()})
+    $panel.Add_Paint({param($p,$e)
+        $s=$p.Tag;$brush=[Drawing.SolidBrush]::new($p.ForeColor)
+        try{
+            for($i=0;$i-lt2;$i++){
+                $top=2+$i*($p.Font.Height+6)
+                if($i-eq1-and$s.Activity-eq'Recording'){
+                    $step=[Math]::Max(1,($p.ClientSize.Width-16.0)/64)
+                    $pen=[Drawing.Pen]::new([Drawing.Color]::FromArgb(25,110,45),2)
+                    try{for($n=0;$n-lt64;$n++){$size=[Math]::Max(1,$s.Peaks[$n]*($p.Font.Height+3));$e.Graphics.DrawLine($pen,[single](8+$n*$step),[single]($top+($p.Font.Height-$size)/2),[single](8+$n*$step),[single]($top+($p.Font.Height+$size)/2))}}finally{$pen.Dispose()}
+                    continue
                 }
-                Invalidate();
-            };
-            ForeColor = Color.FromArgb(30,30,30);
-        }
-        public void SetMessage(string kind, string summary, string detail) {
-            activity="";
-            string prefix;
-            switch (kind) {
-                case "Success": prefix="Erfolg"; BackColor=Color.FromArgb(205,239,211); break;
-                case "Error": prefix="Fehler"; BackColor=Color.FromArgb(255,198,198); break;
-                case "Warning": prefix="Warnung"; BackColor=Color.FromArgb(255,198,198); break;
-                default: prefix="Hinweis"; BackColor=Color.FromArgb(255,226,163); break;
+                $saved=$e.Graphics.Save()
+                try{
+                    $e.Graphics.SetClip([Drawing.Rectangle]::new(8,$top,[Math]::Max(0,$p.ClientSize.Width-16),$p.Font.Height+6))
+                    $e.Graphics.DrawString($s.Lines[$i],$p.Font,$brush,[single](8-$s.Offsets[$i]),[single]$top,[Drawing.StringFormat]::GenericTypographic)
+                    if($s.Widths[$i]-gt$p.ClientSize.Width-16){$e.Graphics.DrawString($s.Lines[$i],$p.Font,$brush,[single](8-$s.Offsets[$i]+$s.Widths[$i]+48),[single]$top,[Drawing.StringFormat]::GenericTypographic)}
+                }finally{$e.Graphics.Restore($saved)}
             }
-            lines[0] = prefix + ": " + (summary ?? "").Replace('\r',' ').Replace('\n',' ');
-            lines[1] = (detail ?? "").Replace('\r',' ').Replace('\n',' ');
-            MeasureLines();
-        }
-        private void MeasureLines() {
-            if (timer == null || IsDisposed) return;
-            Height = 2 * (Font.Height + 6) + 4;
-            using (Graphics g = CreateGraphics()) {
-                for (int i=0; i<2; i++) {
-                    widths[i] = g.MeasureString(lines[i], Font, Int32.MaxValue, StringFormat.GenericTypographic).Width;
-                    offsets[i] = 0;
-                }
-            }
-            timer.Enabled = Visible && ClientSize.Width > 16 && (widths[0] > ClientSize.Width-16 || widths[1] > ClientSize.Width-16);
-            Invalidate();
-        }
-        protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); MeasureLines(); }
-        protected override void OnResize(EventArgs e) { base.OnResize(e); MeasureLines(); }
-        protected override void OnVisibleChanged(EventArgs e) { base.OnVisibleChanged(e); MeasureLines(); }
-        protected override void OnPaint(PaintEventArgs e) {
-            base.OnPaint(e);
-            using (var brush = new SolidBrush(ForeColor)) {
-                for (int i=0; i<2; i++) {
-                    int top = 2 + i*(Font.Height+6);
-                    if(i==1 && activity=="Recording") {
-                        float step=Math.Max(1,(ClientSize.Width-16f)/peaks.Length);
-                        using(var pen=new Pen(Color.FromArgb(25,110,45),2)) {
-                            for(int n=0;n<peaks.Length;n++) {
-                                float size=Math.Max(1,peaks[n]*(Font.Height+3));
-                                e.Graphics.DrawLine(pen,8+n*step,top+(Font.Height-size)/2,8+n*step,top+(Font.Height+size)/2);
-                            }
-                        }
-                        continue;
-                    }
-                    var saved = e.Graphics.Save();
-                    e.Graphics.SetClip(new Rectangle(8, top, Math.Max(0, ClientSize.Width-16), Font.Height+6));
-                    e.Graphics.DrawString(lines[i], Font, brush, 8-offsets[i], top, StringFormat.GenericTypographic);
-                    if (widths[i] > ClientSize.Width-16) {
-                        e.Graphics.DrawString(lines[i], Font, brush, 8-offsets[i]+widths[i]+48, top, StringFormat.GenericTypographic);
-                    }
-                    e.Graphics.Restore(saved);
-                }
-                if(activity=="Transcribing") {
-                    int width=Math.Max(1,ClientSize.Width-16);
-                    e.Graphics.FillRectangle(Brushes.DarkOrange,8+(frame*5)%width,Height-3,Math.Min(24,width),3);
-                }
-            }
-        }
-        protected override void Dispose(bool disposing) {
-            if (disposing && timer != null) timer.Dispose();
-            base.Dispose(disposing);
-        }
+            if($s.Activity-eq'Transcribing'){$width=[Math]::Max(1,$p.ClientSize.Width-16);$e.Graphics.FillRectangle([Drawing.Brushes]::DarkOrange,8+($s.Frame*5)%$width,$p.Height-3,[Math]::Min(24,$width),3)}
+        }finally{$brush.Dispose()}
+    })
+    Measure-TaskPloppMessage $panel
+    return $panel
+}
+function Measure-TaskPloppMessage($Panel) {
+    if($Panel.IsDisposed){return}
+    $s=$Panel.Tag
+    $Panel.Height=2*($Panel.Font.Height+6)+4
+    $g=$Panel.CreateGraphics()
+    try{for($i=0;$i-lt2;$i++){$s.Widths[$i]=$g.MeasureString($s.Lines[$i],$Panel.Font,[int]::MaxValue,[Drawing.StringFormat]::GenericTypographic).Width;$s.Offsets[$i]=0}}finally{$g.Dispose()}
+    $s.Timer.Enabled=$s.HostVisible-and$Panel.Visible-and$Panel.ClientSize.Width-gt16-and($s.Widths[0]-gt$Panel.ClientSize.Width-16-or$s.Widths[1]-gt$Panel.ClientSize.Width-16)
+    $Panel.Invalidate()
+}
+function Set-TaskPloppStatusHostVisible([bool]$Visible) {
+    $script:MessageBar.Tag.HostVisible=$Visible
+    if($Visible){Measure-TaskPloppMessage $script:MessageBar}else{$script:MessageBar.Tag.Timer.Stop()}
+}
+function Set-TaskPloppMessage([string]$Kind,[string]$Summary,[string]$Detail='') {
+    $p=$script:MessageBar;$s=$p.Tag;$s.Activity=''
+    switch($Kind){
+        Success {$prefix='Erfolg';$p.BackColor=[Drawing.Color]::FromArgb(205,239,211)}
+        Error {$prefix='Fehler';$p.BackColor=[Drawing.Color]::FromArgb(255,198,198)}
+        Warning {$prefix='Warnung';$p.BackColor=[Drawing.Color]::FromArgb(255,198,198)}
+        default {$prefix='Hinweis';$p.BackColor=[Drawing.Color]::FromArgb(255,226,163)}
     }
+    $s.Lines[0]=$prefix+': '+($Summary-replace'[\r\n]',' ');$s.Lines[1]=$Detail-replace'[\r\n]',' '
+    Measure-TaskPloppMessage $p
 }
-'@
+function Set-TaskPloppActivity([string]$Mode,[string]$Detail='') {
+    if($Mode-eq'Recording'){Set-TaskPloppMessage Success 'Diktat laeuft' $Detail}else{Set-TaskPloppMessage Notice 'Transkription laeuft' $Detail}
+    $s=$script:MessageBar.Tag;$s.Activity=$Mode;[Array]::Clear($s.Peaks,0,64);$s.Frame=0
 }
-
-function Set-TaskPloppMessage([string]$Kind, [string]$Summary, [string]$Detail = '') {
-    $script:MessageBar.SetMessage($Kind,$Summary,$Detail)
+function Update-TaskPloppActivity([single]$Peak,[double]$Seconds) {
+    $s=$script:MessageBar.Tag;if(-not$s.Activity){return};$s.Frame++
+    if($s.Activity-eq'Recording'){$s.Lines[0]='Diktat laeuft - '+[TimeSpan]::FromSeconds($Seconds).ToString('hh\:mm\:ss');[Array]::Copy($s.Peaks,1,$s.Peaks,0,63);$s.Peaks[63]=$Peak}
+    $script:MessageBar.Invalidate()
 }

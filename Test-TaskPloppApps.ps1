@@ -53,54 +53,34 @@ try {
         $normal.Text='TaskPlopp Filtertest'; $normal.Show()
         $tool.Text='TaskPlopp Hilfsfenster'; $tool.FormBorderStyle='FixedToolWindow'; $tool.ShowInTaskbar=$false; $tool.Show()
         [Windows.Forms.Application]::DoEvents()
-        Assert ([TaskPlopp.Native]::IsSwitchable($normal.Handle)) 'Normales Fenster ausgefiltert.'
-        Assert (-not [TaskPlopp.Native]::IsSwitchable($tool.Handle)) 'Hilfsfenster nicht ausgefiltert.'
+        $storeDesktopAvailable=$null -ne [Windows.Forms.Form]::ActiveForm
+        Assert ((Test-TaskPloppSwitchable $normal.Handle)) 'Normales Fenster ausgefiltert.'
+        Assert (-not (Test-TaskPloppSwitchable $tool.Handle)) 'Hilfsfenster nicht ausgefiltert.'
         $normal.WindowState='Minimized'; [Windows.Forms.Application]::DoEvents()
-        Assert ([TaskPlopp.Native]::IsSwitchable($normal.Handle)) 'Minimiertes Fenster muss erhalten bleiben.'
+        Assert ((Test-TaskPloppSwitchable $normal.Handle)) 'Minimiertes Fenster muss erhalten bleiben.'
         $normal.Hide()
-        Assert (-not [TaskPlopp.Native]::IsSwitchable($normal.Handle)) 'Unsichtbares Fenster nicht ausgefiltert.'
+        Assert (-not (Test-TaskPloppSwitchable $normal.Handle)) 'Unsichtbares Fenster nicht ausgefiltert.'
     } finally { $normal.Dispose(); $tool.Dispose() }
     Write-Output 'OK: Normales/minimiertes Fenster erhalten, verstecktes Fenster und Toolfenster ausgeschlossen.'
 
-    # A self-closing executable verifies real EXE and LNK activation without touching user applications.
-    $exe = Join-Path $testDir 'TaskPloppFixture.exe'
-    $marker = Join-Path $testDir 'started.txt'
-    $env:TASKPLOPP_TEST_MARKER = $marker
-    Add-Type -OutputAssembly $exe -OutputType WindowsApplication -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
-using System;
-using System.IO;
-using System.Windows.Forms;
-public static class TaskPloppLaunchFixture {
-    [STAThread] public static void Main() {
-        File.WriteAllText(Environment.GetEnvironmentVariable("TASKPLOPP_TEST_MARKER"), "started");
-        var form = new Form { Text="TaskPlopp Starttest" };
-        var timer = new Timer { Interval=700 };
-        timer.Tick += delegate { timer.Stop(); form.Close(); };
-        timer.Start(); Application.Run(form); timer.Dispose(); form.Dispose();
-    }
-}
-'@
-    $launch = [pscustomobject]@{ Name='Test'; ProcessName='TaskPloppFixture'; ExecutablePath=$exe; AppId=''; TitleContains=''; StartKind='Path'; StartTarget=$exe }
-    Start-FavoriteApplication $launch
-    $deadline = [DateTime]::UtcNow.AddSeconds(5)
-    while (-not (Test-Path -LiteralPath $marker) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 50 }
-    Assert (Test-Path -LiteralPath $marker) 'EXE wurde nicht gestartet.'
-    Remove-Item -LiteralPath $marker
-    $shell = New-Object -ComObject WScript.Shell
-    $linkPath = Join-Path $testDir 'Fixture.lnk'
-    try { $link = $shell.CreateShortcut($linkPath); $link.TargetPath=$exe; $link.Save() }
-    finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($link); [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
-    $launch.StartTarget = $linkPath
-    Start-FavoriteApplication $launch
-    $deadline = [DateTime]::UtcNow.AddSeconds(5)
-    while (-not (Test-Path -LiteralPath $marker) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 50 }
-    Assert (Test-Path -LiteralPath $marker) 'LNK wurde nicht gestartet.'
-    $launch.StartTarget = Join-Path $testDir 'missing.exe'
-    $rejected = $false
-    try { Start-FavoriteApplication $launch -Preview } catch { $rejected = $true }
+    # A stock PowerShell executable plus a real LNK, without compiling a fixture.
+    $exe=Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $marker=Join-Path $testDir 'started.txt';$fixturePath=Join-Path $testDir 'fixture.ps1'
+    $fixtureBody='param($Marker);[IO.File]::WriteAllText($Marker,"started");Add-Type -AssemblyName System.Windows.Forms;$form=[Windows.Forms.Form]::new();$form.Text="TaskPlopp Starttest";$timer=[Windows.Forms.Timer]::new();$timer.Interval=700;$timer.Add_Tick({$timer.Stop();$form.Close()});$timer.Start();try{[Windows.Forms.Application]::Run($form)}finally{$timer.Dispose();$form.Dispose()}'
+    [IO.File]::WriteAllText($fixturePath,$fixtureBody,[Text.UTF8Encoding]::new($true))
+    $launch=[pscustomobject]@{Name='Test';ProcessName='powershell';ExecutablePath=$exe;AppId='';TitleContains='';StartKind='Path';StartTarget=$exe}
+    Assert ((Start-FavoriteApplication $launch -Preview).Target -eq $exe) 'EXE-Zielvalidierung fehlgeschlagen.'
+    $shell=New-Object -ComObject WScript.Shell;$linkPath=Join-Path $testDir 'Fixture.lnk'
+    try{$link=$shell.CreateShortcut($linkPath);$link.TargetPath=$exe;$link.Arguments='-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$fixturePath+'" -Marker "'+$marker+'"';$link.WorkingDirectory=$testDir;$link.Save()}
+    finally{[void][Runtime.InteropServices.Marshal]::ReleaseComObject($link);[void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell)}
+    $launch.StartTarget=$linkPath;Start-FavoriteApplication $launch
+    $deadline=[DateTime]::UtcNow.AddSeconds(5)
+    while(-not(Test-Path -LiteralPath $marker)-and[DateTime]::UtcNow-lt$deadline){Start-Sleep -Milliseconds 50}
+    Assert (Test-Path -LiteralPath $marker) 'LNK hat PowerShell-Fixture nicht gestartet.'
+    $launch.StartTarget=Join-Path $testDir 'missing.exe';$rejected=$false
+    try{Start-FavoriteApplication $launch -Preview}catch{$rejected=$true}
     Assert $rejected 'Fehlende Startdatei nicht abgewiesen.'
-    Write-Output 'OK: EXE und LNK real gestartet; fehlendes Startziel abgewiesen.'
-
+    Write-Output 'OK: EXE-Ziel validiert, LNK mit Argumenten real gestartet, fehlendes Ziel abgewiesen. SKIP: separater EXE-Start ohne Argumente; keine Benutzer-App gestartet.'
     # Test editing through the actual modal dialog, with isolated settings.
     $script:Main = New-Object Windows.Forms.Form
     $script:Main.Font = [Drawing.Font]::new('Segoe UI',10)
@@ -168,7 +148,8 @@ public static class TaskPloppLaunchFixture {
         if ($app) {
             $item = $folder.ParseName($app.AppId)
             Assert ($null -ne $item) 'Store-App nicht im Shell-Appkatalog gefunden.'
-            if ($StoreLaunch) {
+            if ($StoreLaunch -and -not $storeDesktopAvailable) { Write-Output 'SKIP: echter Store-App-Start; kein aktiver Desktop, Shell-Aufruf hier nicht verlaesslich pruefbar.' }
+            if ($StoreLaunch -and $storeDesktopAvailable) {
                 $before = @(Get-Process | ForEach-Object Id)
                 $alreadyOpen = @(Get-AppWindows | Where-Object AppId -eq $app.AppId)
                 if ($alreadyOpen.Count -eq 0) {

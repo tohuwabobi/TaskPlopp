@@ -1,23 +1,110 @@
-﻿# Adapted from local TDAudioSwitch; only the reusable audio operations, no second GUI loop.
+﻿# Core Audio ABI metadata; no compiled helper or second message loop.
 function Initialize-TaskPloppAudio {
-    if (-not ('TaskPloppAudio.Audio' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'TaskPlopp.Audio.cs') }
+    if('TaskPloppInterop.AudioEnumerator'-as[type]){return}
+    $ipref=[IntPtr].MakeByRefType();$uref=[uint32].MakeByRefType()
+    $null=New-TaskPloppComType 'TaskPloppInterop.AudioEnumerator' 'A95664D2-9614-4F35-A746-DE8DB63617E6' @(
+        @{Name='EnumAudioEndpoints';Args=@([int],[uint32],$ipref)},@{Name='GetDefaultAudioEndpoint';Args=@([int],[int],$ipref)})
+    $null=New-TaskPloppComType 'TaskPloppInterop.AudioCollection' '0BD7A1BE-7A1A-44DB-8397-CC5392387B5E' @(
+        @{Name='GetCount';Args=@($uref)},@{Name='Item';Args=@([uint32],$ipref)})
+    $null=New-TaskPloppComType 'TaskPloppInterop.AudioEndpoint' 'D666063F-1587-4E43-81F1-B948E807363F' @(
+        @{Name='Activate';Args=@([IntPtr],[uint32],[IntPtr],$ipref)},@{Name='OpenPropertyStore';Args=@([uint32],$ipref)},@{Name='GetId';Args=@($ipref)},@{Name='GetState';Args=@($uref)})
+    $null=New-TaskPloppComType 'TaskPloppInterop.AudioProperties' '886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99' @(
+        @{Name='GetCount';Args=@($uref)},@{Name='GetAt';Args=@([uint32],[IntPtr])},@{Name='GetValue';Args=@([IntPtr],[IntPtr])})
+    $methods=@();foreach($name in 'GetMixFormat','GetDeviceFormat','ResetDeviceFormat','SetDeviceFormat','GetProcessingPeriod','SetProcessingPeriod','GetShareMode','SetShareMode','GetPropertyValue','SetPropertyValue'){$methods+=@{Name=$name;Args=@()}}
+    $methods+=@{Name='SetDefaultEndpoint';Args=@([IntPtr],[int])}
+    $null=New-TaskPloppComType 'TaskPloppInterop.AudioPolicy' 'F8679F50-850A-41CF-9C72-430F290290C8' $methods
+    $null=New-TaskPloppNativeType 'TaskPloppInterop.Ole' 'ole32.dll' @(@{Name='PropVariantClear';Return=[int];Args=@([IntPtr])})
 }
-function Get-TaskPloppAudioDevices([int]$Flow) {
+function ConvertTo-TaskPloppComObject([IntPtr]$Pointer,[type]$Type) {
+    try{return [Runtime.InteropServices.Marshal]::GetTypedObjectForIUnknown($Pointer,$Type)}
+    finally{$null=[Runtime.InteropServices.Marshal]::Release($Pointer)}
+}
+function New-TaskPloppAudioEnumerator {
     Initialize-TaskPloppAudio
-    return [TaskPloppAudio.Audio]::GetDevices($Flow)
+    $obj=[Activator]::CreateInstance([type]::GetTypeFromCLSID([guid]'BCDE0395-E52F-467C-8E3D-C4579291692E'))
+    $pointer=[Runtime.InteropServices.Marshal]::GetIUnknownForObject($obj)
+    try{ConvertTo-TaskPloppComObject $pointer ([TaskPloppInterop.AudioEnumerator])}finally{$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($obj)}
+}
+function Invoke-TaskPloppAudioCom($Object,[type]$Type,[string]$Method,[object[]]$Arguments) {
+    $hr=$Type.GetMethod($Method).Invoke($Object,$Arguments)
+    [Runtime.InteropServices.Marshal]::ThrowExceptionForHR($hr)
+}
+function Get-TaskPloppAudioProperty($Store,[guid]$Format,[uint32]$Id) {
+    $key=[Runtime.InteropServices.Marshal]::AllocHGlobal(20);$size=if([IntPtr]::Size-eq8){24}else{16}
+    $value=[Runtime.InteropServices.Marshal]::AllocHGlobal($size)
+    try{
+        [Runtime.InteropServices.Marshal]::Copy($Format.ToByteArray(),0,$key,16)
+        [Runtime.InteropServices.Marshal]::WriteInt32($key,16,[int]$Id)
+        for($i=0;$i-lt$size;$i++){[Runtime.InteropServices.Marshal]::WriteByte($value,$i,0)}
+        try{
+            Invoke-TaskPloppAudioCom $Store ([TaskPloppInterop.AudioProperties]) GetValue ([object[]]@($key,$value))
+            $kind=[Runtime.InteropServices.Marshal]::ReadInt16($value)
+            $pointer=[Runtime.InteropServices.Marshal]::ReadIntPtr($value,8)
+            if($pointer-eq[IntPtr]::Zero){return ''}
+            if($kind-eq31){return [Runtime.InteropServices.Marshal]::PtrToStringUni($pointer)}
+            if($kind-eq72){return ([guid][Runtime.InteropServices.Marshal]::PtrToStructure($pointer,[guid])).ToString('D')}
+            return ''
+        }finally{$null=[TaskPloppInterop.Ole]::PropVariantClear($value)}
+    }finally{[Runtime.InteropServices.Marshal]::FreeHGlobal($key);[Runtime.InteropServices.Marshal]::FreeHGlobal($value)}
+}
+function Get-TaskPloppAudioEndpointId($Endpoint) {
+    $argsList=[object[]]@([IntPtr]::Zero)
+    Invoke-TaskPloppAudioCom $Endpoint ([TaskPloppInterop.AudioEndpoint]) GetId $argsList
+    try{[Runtime.InteropServices.Marshal]::PtrToStringUni($argsList[0])}finally{[Runtime.InteropServices.Marshal]::FreeCoTaskMem($argsList[0])}
+}
+function Get-TaskPloppAudioDevices([ValidateRange(0,1)][int]$Flow) {
+    $enumerator=New-TaskPloppAudioEnumerator;$collection=$null
+    try{
+        $argsList=[object[]]@($Flow,[uint32]1,[IntPtr]::Zero)
+        Invoke-TaskPloppAudioCom $enumerator ([TaskPloppInterop.AudioEnumerator]) EnumAudioEndpoints $argsList
+        $collection=ConvertTo-TaskPloppComObject $argsList[2] ([TaskPloppInterop.AudioCollection])
+        $count=[object[]]@([uint32]0);Invoke-TaskPloppAudioCom $collection ([TaskPloppInterop.AudioCollection]) GetCount $count
+        for($i=0;$i-lt$count[0];$i++){
+            $endpoint=$null;$store=$null
+            try{
+                $item=[object[]]@([uint32]$i,[IntPtr]::Zero);Invoke-TaskPloppAudioCom $collection ([TaskPloppInterop.AudioCollection]) Item $item
+                $endpoint=ConvertTo-TaskPloppComObject $item[1] ([TaskPloppInterop.AudioEndpoint])
+                $id=Get-TaskPloppAudioEndpointId $endpoint
+                $props=[object[]]@([uint32]0,[IntPtr]::Zero);Invoke-TaskPloppAudioCom $endpoint ([TaskPloppInterop.AudioEndpoint]) OpenPropertyStore $props
+                $store=ConvertTo-TaskPloppComObject $props[1] ([TaskPloppInterop.AudioProperties])
+                $name=Get-TaskPloppAudioProperty $store 'A45C254E-DF1C-4EFD-8020-67D146A850E0' 14
+                $container='';try{$container=Get-TaskPloppAudioProperty $store '8C7ED206-3F8A-4827-B3AB-AE9E1FAEFC6C' 2}catch{}
+                [pscustomobject]@{Id=$id;Name=$(if($name){$name}else{$id});ContainerId=$container}
+            }finally{if($null-ne$store){$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($store)};if($null-ne$endpoint){$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($endpoint)}}
+        }
+    }finally{if($null-ne$collection){$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($collection)};$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($enumerator)}
+}
+function Get-TaskPloppAudioDefaultId([ValidateRange(0,1)][int]$Flow,[ValidateRange(0,2)][int]$Role) {
+    $enumerator=New-TaskPloppAudioEnumerator;$endpoint=$null
+    try{
+        $argsList=[object[]]@($Flow,$Role,[IntPtr]::Zero)
+        $hr=[TaskPloppInterop.AudioEnumerator].GetMethod('GetDefaultAudioEndpoint').Invoke($enumerator,$argsList)
+        if($hr-eq-2147023728){return ''};[Runtime.InteropServices.Marshal]::ThrowExceptionForHR($hr)
+        $endpoint=ConvertTo-TaskPloppComObject $argsList[2] ([TaskPloppInterop.AudioEndpoint])
+        Get-TaskPloppAudioEndpointId $endpoint
+    }finally{if($null-ne$endpoint){$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($endpoint)};$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($enumerator)}
+}
+function Set-TaskPloppAudioRole([string]$Id,[ValidateRange(0,2)][int]$Role) {
+    if([string]::IsNullOrWhiteSpace($Id)){throw 'Leere Audiogeraete-ID.'}
+    Initialize-TaskPloppAudio
+    $obj=[Activator]::CreateInstance([type]::GetTypeFromCLSID([guid]'870AF99C-171D-4F9E-AF0D-E63DF40C2BC9'))
+    try{$policy=ConvertTo-TaskPloppComObject ([Runtime.InteropServices.Marshal]::GetIUnknownForObject($obj)) ([TaskPloppInterop.AudioPolicy])}finally{$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($obj)}
+    $wide=[Runtime.InteropServices.Marshal]::StringToCoTaskMemUni($Id)
+    try{Invoke-TaskPloppAudioCom $policy ([TaskPloppInterop.AudioPolicy]) SetDefaultEndpoint ([object[]]@($wide,$Role))}
+    finally{[Runtime.InteropServices.Marshal]::FreeCoTaskMem($wide);$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($policy)}
 }
 function Get-TaskPloppAudioDefaults([int]$Flow) {
     Initialize-TaskPloppAudio
     for ($role=0; $role -lt 3; $role++) {
         try {
-            $id = [TaskPloppAudio.Audio]::GetDefaultId($Flow,$role)
+            $id = (Get-TaskPloppAudioDefaultId $Flow $role)
             [pscustomobject]@{ Role=$role; Id=$id; Error='' }
         } catch { [pscustomobject]@{ Role=$role; Id=''; Error='Standardgeraet nicht lesbar' } }
     }
 }
 function Set-TaskPloppAudioDefault([string]$Id) {
     Initialize-TaskPloppAudio
-    for ($role=0; $role -lt 3; $role++) { [TaskPloppAudio.Audio]::SetDefaultId($Id,$role) }
+    for ($role=0; $role -lt 3; $role++) { Set-TaskPloppAudioRole $Id $role }
 }
 function Get-TaskPloppAudioLabel($Device, [object[]]$Defaults) {
     $roles = @('Console','Multimedia','Kommunikation')

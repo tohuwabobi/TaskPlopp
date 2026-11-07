@@ -1,6 +1,11 @@
 ﻿# TaskPlopp
 
 Kleiner lokaler Fensterumschalter fuer Windows PowerShell 5.1 mit Windows Forms.
+Eigener Programm-, Installer- und Testcode besteht ausschliesslich aus PowerShell.
+Es wird kein C#-Quelltext kompiliert und keine eigene Hilfs-DLL erzeugt. Die kleine
+Datei `TaskPlopp.Native.ps1` deklariert benoetigte Windows-/COM-Schnittstellen ueber
+.NET-Laufzeitmetadaten. Windows Forms, Windows-APIs und die nativen Whisper-/Vosk-
+Programme bleiben die vorhandenen Laufzeitabhaengigkeiten.
 Keine Zusatzmodule, kein Administrator und kein Autostart. Ein kleiner lokaler Prozess haelt den Hotkey aktiv.
 
 ## Starten
@@ -281,9 +286,44 @@ whisper.cpp und das Whisper-Modell. Vosk stellt im verwendeten Release keinen
 Herausgeber-Digest bereit; Download erfolgt von festen offiziellen HTTPS-Quellen.
 Keine Behauptung eines unabhaengigen Hashnachweises fuer diese Vosk-Dateien.
 
+## Konfiguration sichern und uebertragen
+
+**Rechtsklick auf das Zahnrad > Konfiguration sichern/uebertragen** oder derselbe
+Eintrag im Infobereich oeffnet einen kleinen Dialog mit Exportieren und Importieren.
+Der normale Zahnradklick bleibt die Konfiguration. Export sichert den gespeicherten
+Stand; ein noch offener Konfigurationsentwurf muss zuerst geschlossen werden.
+
+Die ZIP enthaelt `config.json` und nur die direkt referenzierten Verknuepfungen unter
+`links/0001.lnk` usw. Keine Formatversion, kein Manifest. LNK-Dateien bleiben binaer
+unveraendert, einschliesslich Argumenten und Arbeitsverzeichnis; mehrfach verwendete
+Links werden einmal mitgenommen. EXE-Dateien, Chrome-Profile, Audio-/Diktatmodelle,
+Windows-Audiostandards und Autostarteinrichtung werden nicht mitgesichert.
+
+Import zeigt Favoriten-/Linkanzahl und Hinweise auf fehlende Ziele. Nach Bestaetigung
+ersetzt er die ganze Konfiguration. Vorher entsteht eine ZIP unter
+`%LOCALAPPDATA%\TaskPlopp\Backups`, einschliesslich exakter alter Configdatei als
+`config-original.json`. Beschaedigte alte JSON-Dateien werden als Rohsicherung mit
+Hinweis erhalten und sperren einen gueltigen Restore nicht. Eine solche reine
+Rohsicherung muss manuell entnommen werden; sie ist kein gueltiges GUI-Importpaket.
+Fehlende alte Links werden benannt. Ist die Config selbst unlesbar oder die Sicherung
+nicht schreibbar, wird vor dem Ersetzen abgebrochen.
+
+Importierte Links liegen in einem neuen Ordner unter
+`%LOCALAPPDATA%\TaskPlopp\ImportedShortcuts`. Reihenfolge und Tastennummern bleiben;
+Pfade, Arbeitsverzeichnisse und Chrome-Profilnamen muessen auf einem anderen PC ggf.
+manuell angepasst werden. Es werden keine Programme aus der Vorschau gestartet.
+Sicherungen und alte Importordner werden nicht automatisch geloescht.
+
+Import ist waehrend Aufnahme, Transkription oder Einrichtung gesperrt, Export bleibt
+moeglich. Hotkeykonflikte werden gemeldet. Bei einem Fehler nach dem Schreibpunkt
+bleiben die neuen Linkkopien erhalten; der Dialog nennt den Sicherungspfad und weist
+auf den zu pruefenden gespeicherten Stand hin. Kein stiller Rollback oder Retry.
 ## Pruefung
 
 ```powershell
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppNative.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppTransfer.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppTransferUi.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPlopp.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudio.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudioUi.ps1
@@ -300,10 +340,14 @@ Mit `-ResidentTest` statt `-SmokeTest` werden Ausblenden und erneutes Einblenden
 Der Smoke-Test oeffnet die GUI kurz, speichert `%TEMP%\TaskPlopp-smoke.png` und
 schliesst sie. Der echte Wechsel aus Citrix-Vollbild muss vor Ort geprueft werden.
 Der App-Test prueft Konfigurationsmigration, Fensterfilter, App-Identitaeten,
-Ausblenden, EXE-/LNK-Starts mit einem kurzlebigen Testprogramm und den echten
+Ausblenden, EXE-Zielvalidierung, echten LNK-Start eines kurzlebigen PowerShell-
+Testfensters und den echten
 Konfigurationsdialog mit temporaeren Einstellungen. `-StoreLaunch` startet
 zusaetzlich den Windows-Rechner, sofern kein Rechnerfenster offen ist. Nur ein
-dabei neu entstandener Rechnerprozess wird anschliessend geschlossen.
+dabei neu entstandener Rechnerprozess wird anschliessend geschlossen. Ohne aktiven
+Desktop bleibt der echte Store-Start als SKIP offen; die Shell-Aktivierung ist dort
+nicht verlaesslich pruefbar. Ein direkter EXE-Start ohne Parameter bleibt ebenfalls
+ein Praxisbeleg; die automatische Fixture prueft den echten LNK-Start samt Argumenten.
 Die Konfigurationsvorschau liegt unter `%TEMP%\TaskPlopp-configuration.png`.
 
 Der Audio-Test prueft COM-Signaturen, Variantenlayout, drei Rollen, Farben,
@@ -333,9 +377,24 @@ bleiben manuelle Abnahmeschritte. Vorschauen: `%TEMP%\TaskPlopp-dictation-*.png`
 
 Der Hotkey-Test reserviert ausschliesslich freie Testkombinationen und gibt diese
 anschliessend frei. Er prueft Registrierung/Wechsel, unveraendertes Speichern,
-Belegung, Speicherfehler, Callback nach Wechsel und Konfigurationsdialog mit
+Belegung, Speicherfehler, WakeEvent nach Wechsel und Konfigurationsdialog mit
 temporaerer Datei. Der Callback wird durch eine gezielte Windows-Nachricht geprueft;
 dies ersetzt keinen echten Tastendruck in Citrix. Vorschau: `%TEMP%\TaskPlopp-hotkey-config.png`.
+
+Der Native-Test prueft ausserdem den Quellcode auf Compilerpfade, ABI-Caching,
+Mikrofonzuordnung per Endpoint-ID und synthetische FIFO-/Teilpuffer-/Ueberlauffaelle.
+Nur mit ausdruecklichem `-Microphone` macht er eine kurze Aufnahme am aktuellen
+Standardmikrofon, ausschliesslich im RAM und ohne Transkription; er vergleicht die
+Byteanzahl mit der Treiberposition und prueft die Freigabe. Diktat bleibt waehrend
+des Betriebs beim Ausblenden aktiv. Stoppen erfolgt kooperativ im WinMM-Runspace;
+TaskPlopp wartet darauf ohne die GUI zu blockieren. Vosk laeuft in einem kurzlebigen
+versteckten PowerShell-Prozess, Whisper in seiner vorhandenen EXE. Beide erhalten
+Audio ueber stdin, liefern Text ueber stdout und benoetigen keine Audiodatei.
+
+Transfer-Tests verwenden isolierte Configs, echte Test-LNKs und Tempziele. Sie pruefen
+Originalbytes und LNK-Eigenschaften, Fehlerpakete, beschaedigten Altbestand sowie
+Fehler vor/nach dem Save. Der GUI-Test prueft Kontextmenue, Entwurfsschutz, doppelte
+Oeffnung und Schliessen. Echte Uebertragung auf einen anderen PC bleibt ein Praxistest.
 
 ## Symbol
 

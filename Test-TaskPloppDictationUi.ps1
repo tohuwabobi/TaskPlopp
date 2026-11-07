@@ -51,14 +51,14 @@ try {
             Update-TaskPloppDictationButton
             Assert (-not $mic.Enabled) 'Aufnahme waehrend Einrichtung moeglich'
             $script:DictationInstaller=$null;Update-TaskPloppDictationButton
-            $script:MessageBar.SetActivity('Recording','')
-            for($n=0;$n -lt 64;$n++){$script:MessageBar.UpdateActivity(($n%10)/10.0,$n)}
+            Set-TaskPloppActivity Recording
+            for($n=0;$n -lt 64;$n++){Update-TaskPloppActivity (($n%10)/10.0) $n}
             Preview $sender 'TaskPlopp-dictation-recording.png'
             $sender.Hide();Assert (-not $sender.Visible) 'Ausblenden fehlgeschlagen'
             $sender.Show();$sender.Font=[Drawing.Font]::new('Segoe UI',15)
             Preview $sender 'TaskPlopp-dictation-large-font.png'
-            $script:MessageBar.SetActivity('Transcribing','Vosk')
-            $script:MessageBar.UpdateActivity(0,0)
+            Set-TaskPloppActivity Transcribing Vosk
+            Update-TaskPloppActivity 0 0
             $script:DictationPendingText='Zwischenergebnis'
             function Set-TaskPloppDictationClipboard([string]$Text){throw 'Simulierte belegte Zwischenablage'}
             Copy-TaskPloppDictationResult
@@ -68,20 +68,29 @@ try {
             Copy-TaskPloppDictationResult
             Assert ($script:TestCopiedText -eq 'Zwischenergebnis' -and -not $script:DictationPendingText) 'Kopierversuch fehlgeschlagen'
             $fake=[pscustomobject]@{Done=$true;Error='';Text=''}
-            $fake | Add-Member ScriptMethod Dispose {}
+            $fake | Add-Member NoteProperty Disposed $true
             $script:DictationJob=$fake;$script:DictationPhase='Transcribing'
             Invoke-TaskPloppDictationTick
             Assert ($script:DictationPhase -eq 'Ready' -and -not $script:DictationPendingText) 'Leeres Ergebnis als Erfolg behandelt'
             $fake=[pscustomobject]@{Done=$true;Error='Testfehler';Text='Nicht kopieren'}
-            $fake | Add-Member ScriptMethod Dispose {}
+            $fake | Add-Member NoteProperty Disposed $true
             $script:DictationJob=$fake;$script:DictationPhase='Transcribing'
             Invoke-TaskPloppDictationTick
             Assert ($script:TestCopiedText -eq 'Zwischenergebnis') 'Fehlerergebnis kopiert'
-            $fake=[pscustomobject]@{}
-            $fake | Add-Member ScriptMethod Dispose {$script:FakeRecorderDisposed=$true}
+            $fake=[pscustomobject]@{Disposed=$true;Async=[pscustomobject]@{IsCompleted=$true};StopWatch=$null;Shared=@{Stop=$false;Discard=$false;Closed=$true;Error='';Pcm=$null;MaxPeak=0.0}}
             $script:DictationRecorder=$fake;$script:DictationPhase='Recording'
-            Stop-TaskPloppRecording -Discard
-            Assert ($script:FakeRecorderDisposed -and $script:DictationPhase -eq 'Ready') 'Verwerfen gibt Aufnahme nicht frei'
+            Stop-TaskPloppRecording -Discard;Invoke-TaskPloppDictationTick
+            Assert ($fake.Shared.Discard-and$script:DictationPhase-eq'Ready'-and$null-eq$script:DictationRecorder) 'Verwerfen gibt Aufnahme nicht frei'
+            $hang=[pscustomobject]@{Disposed=$false;Async=[pscustomobject]@{IsCompleted=$false};StopWatch=[pscustomobject]@{Elapsed=[TimeSpan]::FromSeconds(3)};Shared=@{Stop=$true;Discard=$false;Error='';Peak=0.0;MaxPeak=0.0}}
+            $script:DictationRecorder=$hang;$script:DictationPhase='Recording'
+            Invoke-TaskPloppDictationTick
+            Assert (-not$hang.Disposed-and$script:DictationPhase-eq'Recording') 'Unfertigen Worker freigegeben oder neue Aufnahme erlaubt'
+            Assert ($script:MessageBar.BackColor.R-eq255) 'Ausbleibende Freigabe nicht gemeldet'
+            $failedClose=[pscustomobject]@{Disposed=$true;Async=[pscustomobject]@{IsCompleted=$true};StopWatch=$null;Shared=@{Stop=$true;Discard=$false;Closed=$false;Error='Treiber schliesst nicht';Pcm=$null;MaxPeak=0.0}}
+            $script:DictationRecorder=$failedClose;$script:DictationPhase='Recording'
+            Invoke-TaskPloppDictationTick
+            Assert (-not$mic.Enabled-and$script:DictationPhase-eq'Recording') 'Nicht freigegebenes Mikrofon erlaubt neue Aufnahme'
+            $script:DictationRecorder=$null;$script:DictationPhase='Ready';Update-TaskPloppDictationButton
             $oldRoot=$script:DictationRoot;$script:DictationRoot=Join-Path $env:TEMP 'TaskPlopp-missing-dictation-fixture'
             Invoke-TaskPloppDictation
             Assert ($script:DictationPhase -eq 'Ready' -and $null -eq $script:DictationRecorder) 'Fehlende Engine startet Aufnahme'
@@ -93,13 +102,11 @@ try {
                 $heartbeat.Add_Tick({$global:DictationHeartbeats++});$heartbeat.Start()
                 try {
                     foreach($engine in 'Whisper','Vosk'){
-                        $fake=[pscustomobject]@{}
-                        $fake | Add-Member ScriptMethod Dispose {}
-                        $fake | Add-Member ScriptMethod Stop {return ,$global:DictationFixturePcm}
+                        $fake=[pscustomobject]@{Disposed=$true;Async=[pscustomobject]@{IsCompleted=$true};StopWatch=$null;Shared=@{Stop=$false;Discard=$false;Closed=$true;Error='';Pcm=$global:DictationFixturePcm;MaxPeak=1.0}}
                         $script:DictationRecorder=$fake;$script:DictationPhase='Recording'
                         $script:DictationEngine=$engine;$script:DictationMaxPeak=1
-                        Stop-TaskPloppRecording
-                        Assert ($script:DictationPhase -eq 'Transcribing') 'Echte Engine nicht gestartet'
+                        Stop-TaskPloppRecording;Invoke-TaskPloppDictationTick
+                        Assert ($script:DictationPhase-eq'Transcribing') 'Echte Engine nicht gestartet'
                         $watch=[Diagnostics.Stopwatch]::StartNew()
                         while($script:DictationPhase -eq 'Transcribing'){
                             if($watch.Elapsed.TotalSeconds -gt 30){throw 'GUI-Engine-Timeout'}

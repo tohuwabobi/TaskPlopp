@@ -4,7 +4,8 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'TaskPlopp.Keyboard.ps1')
 function Assert([bool]$Condition,[string]$Message) { if (-not $Condition) { throw $Message } }
-$form = New-Object TaskPlopp.KeyboardForm
+$form = New-Object Windows.Forms.Form
+Initialize-TaskPloppKeyboard $form
 $form.Text = 'TaskPlopp Tastaturtest'
 $form.TopMost = $true
 $buttons = @(); $script:ClickedIndex = -1
@@ -55,7 +56,7 @@ try {
     Assert ($script:ClickedIndex -eq 99) 'Neue Taste hat alten Button aktiviert.'
     Assert (-not $form.TrySelectKey([Windows.Forms.Keys]::A)) 'Nicht mehr vorhandenen Button ausgefuehrt.'
     $script:BackCount=0
-    $form.add_BackRequested({ $script:BackCount++ })
+    function Show-TaskPloppView { $script:BackCount++ }
     $form.AudioView=$true
     $menu=New-Object Windows.Forms.ContextMenuStrip
     [void]$menu.Items.Add('Testmenue')

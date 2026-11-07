@@ -376,6 +376,7 @@ function Show-TaskPloppConfiguration {
     $editor.Enabled = $false
     if ($favoriteList.Items.Count -gt 0) { $favoriteList.SelectedIndex = 0 }
     if ($OnShown) { $dialog.Add_Shown($OnShown) }
-    try { [void]$dialog.ShowDialog($script:Main) } finally { $dictationStatusTimer.Dispose();$dialog.Dispose() }
+    $script:ConfigurationOpen=$true
+    try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$dictationStatusTimer.Dispose();$dialog.Dispose() }
     Show-TaskPloppView
 }

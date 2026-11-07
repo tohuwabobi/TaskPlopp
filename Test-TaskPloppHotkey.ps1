@@ -19,11 +19,12 @@ New-Item -ItemType Directory -Path $root | Out-Null
 $script:ConfigPath=Join-Path $root 'config.json'
 $script:HotkeysEnabled=$true
 $reservations=@()
+$script:WakeEvent=[Threading.EventWaitHandle]::new($false,[Threading.EventResetMode]::AutoReset)
 try {
     foreach($testKeyName in @('F20','F21','F22','F23','F24','F19','F18')){
         $data=ConvertTo-TaskPloppSettings ([pscustomobject]@{Programs=@();ShowOpenWindows=$false;HotkeyModifiers=7;HotkeyKey=$testKeyName})
         $spec=Get-TaskPloppHotkeySpec $data
-        try {$listener=[TaskPloppHotkey.Listener]::new($spec.Modifiers,$spec.Key)}catch{continue}
+        try {$listener=(New-TaskPloppHotkeyListener $spec)}catch{continue}
         $reservations+=[pscustomobject]@{Data=$data;Spec=$spec;Listener=$listener}
         if($reservations.Count -eq 3){break}
     }
@@ -34,14 +35,11 @@ try {
     $reservations[1].Listener.Dispose()
     Save-TaskPloppSettingsWithHotkey $reservations[1].Data
     $active=$script:HotkeyListener
-    Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TaskPloppHotkeyTestMessage { [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr window,uint message,IntPtr first,IntPtr second); }'
-    $script:HotkeyWakeCount=0
-    function Show-TaskPlopp {$script:HotkeyWakeCount++}
-    $null=[TaskPloppHotkeyTestMessage]::SendMessage($active.Handle,0x312,[IntPtr]1,[IntPtr]0)
-    Assert ($script:HotkeyWakeCount -eq 1) 'Neuer Hotkey hat keinen Oeffnen-Handler'
+    $null=[TaskPloppInterop.User]::PostThreadMessageW($active.State.ThreadId,0x312,[IntPtr]1,[IntPtr]0)
+    Assert ($script:WakeEvent.WaitOne(2000)) 'Neuer Hotkey hat WakeEvent nicht ausgeloest'
     Assert ((Get-Settings).HotkeyKey -eq $reservations[1].Data.HotkeyKey) 'Neue Kombination nicht gespeichert'
-    $oldProbe=[TaskPloppHotkey.Listener]::new($reservations[0].Spec.Modifiers,$reservations[0].Spec.Key);$oldProbe.Dispose()
-    $caught=$false;try{$probe=[TaskPloppHotkey.Listener]::new($reservations[1].Spec.Modifiers,$reservations[1].Spec.Key);$probe.Dispose()}catch{$caught=$true}
+    $oldProbe=(New-TaskPloppHotkeyListener $reservations[0].Spec);$oldProbe.Dispose()
+    $caught=$false;try{$probe=(New-TaskPloppHotkeyListener $reservations[1].Spec);$probe.Dispose()}catch{$caught=$true}
     Assert $caught 'Neue Kombination nicht aktiv'
     Save-TaskPloppSettingsWithHotkey $reservations[1].Data
     Assert ([object]::ReferenceEquals($active,$script:HotkeyListener)) 'Unveraenderten Hotkey neu registriert'
@@ -53,13 +51,14 @@ try {
     $caught=$false;try{Save-TaskPloppSettingsWithHotkey $reservations[0].Data}catch{$caught=$true}
     $script:ConfigPath=$realPath
     Assert ($caught -and [object]::ReferenceEquals($active,$script:HotkeyListener)) 'Speicherfehler zerstoert aktiven Hotkey'
-    $probe=[TaskPloppHotkey.Listener]::new($reservations[0].Spec.Modifiers,$reservations[0].Spec.Key);$probe.Dispose()
+    $probe=(New-TaskPloppHotkeyListener $reservations[0].Spec);$probe.Dispose()
     'OK: Defaults/Validierung, echter Wechsel, unveraendertes Speichern, Konflikt erhaelt Hotkey/Datei, Speicherfehler gibt Kandidat frei.'
 } finally {
     if(Get-Variable HotkeyListener -Scope Script -ErrorAction SilentlyContinue){$script:HotkeyListener.Dispose()}
     foreach($entry in $reservations){$entry.Listener.Dispose()}
     Get-ChildItem -LiteralPath $root -File | ForEach-Object {Remove-Item -LiteralPath $_.FullName}
     Remove-Item -LiteralPath $root
+    $script:WakeEvent.Dispose();$script:WakeEvent=$null
     $script:HotkeyListener=$null;$script:ActiveHotkey=$null;$script:HotkeysEnabled=$false
 }
 

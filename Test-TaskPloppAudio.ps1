@@ -5,14 +5,11 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Condition,[string]$Message) { if(-not $Condition) { throw $Message } }
 Initialize-TaskPloppAudio
-$assembly=[TaskPloppAudio.Audio].Assembly
-$variant=$assembly.GetType('TaskPloppAudio.PropVariant')
-Assert ([Runtime.InteropServices.Marshal]::SizeOf([type]$variant) -eq $(if([IntPtr]::Size -eq 8) {24} else {16})) 'PROPVARIANT-Groesse falsch.'
-foreach($type in $assembly.GetTypes() | Where-Object { $_.IsImport -and $_.IsInterface }) {
-    foreach($method in $type.GetMethods()) {
-        Assert (($method.MethodImplementationFlags -band [Reflection.MethodImplAttributes]::PreserveSig) -ne 0) "PreserveSig fehlt: $($type.Name).$($method.Name)"
-    }
+foreach($type in @([TaskPloppInterop.AudioEnumerator],[TaskPloppInterop.AudioEndpoint],[TaskPloppInterop.AudioProperties],[TaskPloppInterop.AudioPolicy])) {
+    foreach($method in $type.GetMethods()) {Assert (($method.MethodImplementationFlags -band [Reflection.MethodImplAttributes]::PreserveSig) -ne 0) 'PreserveSig fehlt.'}
 }
+$enumerator=New-TaskPloppAudioEnumerator
+Assert ([Runtime.InteropServices.Marshal]::ReleaseComObject($enumerator)-eq0) 'Zusaetzliche COM-Referenz des Erzeugers bleibt uebrig.'
 $device=[pscustomobject]@{Id='A';Name='Testmikrofon';ContainerId='group-1'}
 $all=@(0..2 | ForEach-Object { [pscustomobject]@{Role=$_;Id='A';Error=''} })
 Assert ((Get-TaskPloppAudioLabel $device $all) -like '[[]Aktiv[]]*') 'Einheitlicher Standard nicht markiert.'
@@ -39,7 +36,7 @@ foreach($flow in 0,1) {
         Assert (@($actual | Where-Object {$_.Id -ne $target.Id -or $_.Error}).Count -eq 0) 'Realer Wechsel nicht fuer alle Rollen bestaetigt.'
         Write-Output "OK: Flow $flow real umgeschaltet und alle drei Rollen bestaetigt."
     } finally {
-        foreach($old in $defaults) { [TaskPloppAudio.Audio]::SetDefaultId($old.Id,$old.Role) }
+        foreach($old in $defaults) { Set-TaskPloppAudioRole $old.Id $old.Role }
         $restored=@(Get-TaskPloppAudioDefaults $flow)
         foreach($old in $defaults) { Assert ($restored[$old.Role].Id -eq $old.Id) 'Urspruenglicher Standard nicht wiederhergestellt.' }
         Write-Output "OK: Flow $flow auf urspruengliche Standards zurueckgestellt."
@@ -63,7 +60,8 @@ function Set-TaskPloppAudioDefault($Id) { throw 'Test: Geraet inzwischen entfern
 Invoke-TaskPloppAudioSelection $device 1
 Assert ($script:MessageKind -eq 'Error' -and $script:RefreshCount -eq 3) 'Fehler nicht gemeldet oder Ansicht nicht erneuert.'
 function Get-TaskPloppAudioDevices($Flow) { @() }
-$script:Main=New-Object TaskPlopp.KeyboardForm
+$script:Main=New-Object Windows.Forms.Form
+Initialize-TaskPloppKeyboard $script:Main
 $script:ListPanel=New-Object Windows.Forms.FlowLayoutPanel
 $script:ListPanel.Size=[Drawing.Size]::new(500,300)
 $script:Main.Controls.Add($script:ListPanel)

@@ -26,31 +26,37 @@ try {
     try {
         $fixture.Show()
         [Windows.Forms.Application]::DoEvents()
+        $hasDesktop=[Windows.Forms.Form]::ActiveForm-eq$fixture
         $fixture.WindowState = 'Minimized'
         [Windows.Forms.Application]::DoEvents()
-        if (-not [TaskPlopp.Native]::Activate($fixture.Handle)) { throw 'Testfenster wurde nicht aktiviert.' }
+        $activated=Activate-TaskPloppWindow $fixture.Handle
+        if($hasDesktop-and-not$activated){throw 'Testfenster wurde nicht aktiviert.'}
+        if(-not$hasDesktop){Write-Output 'SKIP: echter Vordergrundwechsel; kein aktiver Desktop. Wiederherstellen/Minimieren werden separat geprueft.'}
         [Windows.Forms.Application]::DoEvents()
         if ($fixture.WindowState -eq 'Minimized') { throw 'Testfenster wurde nicht wiederhergestellt.' }
-        if ([TaskPlopp.Native]::Activate([IntPtr]::Zero)) { throw 'Ungueltiges Fenster wurde akzeptiert.' }
-        Write-Output 'OK: Minimiertes Testfenster wiederhergestellt und aktiviert; ungueltiges Fenster abgelehnt.'
+        if ((Activate-TaskPloppWindow ([IntPtr]::Zero))) { throw 'Ungueltiges Fenster wurde akzeptiert.' }
+        Write-Output 'OK: Minimiertes Testfenster wiederhergestellt; ungueltiges Fenster abgelehnt.'
         $cover = New-Object Windows.Forms.Form
         $cover.Text = 'TaskPlopp Test - ueberdeckendes Fenster'
         $cover.TopMost = $true
         try {
             $cover.Show()
             [Windows.Forms.Application]::DoEvents()
-            $fixture.WindowState = 'Minimized'
-            if (-not [TaskPlopp.Native]::ActivateWithCoverWindows($fixture.Handle, [IntPtr[]]@($cover.Handle))) {
+            $hasDesktop=[Windows.Forms.Form]::ActiveForm-eq$fixture
+        $fixture.WindowState = 'Minimized'
+            $activated=Activate-TaskPloppCoveredWindow $fixture.Handle ([IntPtr[]]@($cover.Handle))
+            if ($hasDesktop -and -not $activated) {
                 throw 'Fensterwechsel mit ueberdeckendem Fenster fehlgeschlagen.'
             }
             [Windows.Forms.Application]::DoEvents()
             if ($cover.WindowState -ne 'Minimized' -or $fixture.WindowState -eq 'Minimized') {
                 throw 'Ueberdeckendes Fenster nicht minimiert oder Ziel nicht wiederhergestellt.'
             }
-            if (-not [TaskPlopp.Native]::ActivateWithCoverWindows($fixture.Handle, [IntPtr[]]@($fixture.Handle))) {
+            $activated=Activate-TaskPloppCoveredWindow $fixture.Handle ([IntPtr[]]@($fixture.Handle))
+            if ($hasDesktop -and -not $activated) {
                 throw 'Ziel darf nicht selbst minimiert werden.'
             }
-            Write-Output 'OK: Ueberdeckendes Topmost-Fenster minimiert, Ziel wiederhergestellt und aktiviert; Ziel selbst ausgeschlossen.'
+            Write-Output 'OK: Ueberdeckendes Topmost-Fenster minimiert, Ziel wiederhergestellt; Ziel selbst ausgeschlossen.'
         } finally { $cover.Dispose() }
     } finally { $fixture.Dispose() }
 } finally {

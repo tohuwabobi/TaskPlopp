@@ -1,42 +1,4 @@
-﻿# The old IdleLock observation, extended by the Windows input timestamp for brief key presses.
-# No keys, coordinates or input history are logged or persisted.
-if(-not ('TaskPloppIdle.Input' -as [type])) {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-namespace TaskPloppIdle {
-    public sealed class Snapshot {
-        public bool Available;
-        public int X, Y;
-        public bool KeyDown;
-        public uint InputTick;
-    }
-    public static class Input {
-        [StructLayout(LayoutKind.Sequential)] private struct Point { public int X,Y; }
-        [StructLayout(LayoutKind.Sequential)] private struct LastInput { public uint Size,Tick; }
-        [DllImport("user32.dll")] private static extern bool GetCursorPos(out Point point);
-        [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
-        [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LastInput input);
-        [DllImport("user32.dll")] public static extern bool LockWorkStation();
-        public static Snapshot Read() {
-            Point point;
-            var result = new Snapshot();
-            result.Available = GetCursorPos(out point);
-            if (!result.Available) return result; // E.g. locked/input desktop unavailable.
-            result.X=point.X; result.Y=point.Y;
-            var last = new LastInput { Size=(uint)Marshal.SizeOf(typeof(LastInput)) };
-            if (GetLastInputInfo(ref last)) result.InputTick=last.Tick;
-            for (int key=1; key<255; key++) {
-                if ((GetAsyncKeyState(key) & 0x8000) != 0) { result.KeyDown=true; break; }
-            }
-            return result;
-        }
-    }
-}
-'@
-}
-
-function Get-TaskPloppIdleClock { return [double][Diagnostics.Stopwatch]::GetTimestamp() / [Diagnostics.Stopwatch]::Frequency }
+﻿function Get-TaskPloppIdleClock { return [double][Diagnostics.Stopwatch]::GetTimestamp() / [Diagnostics.Stopwatch]::Frequency }
 function New-TaskPloppIdleState([bool]$Enabled,[int]$Minutes) {
     [pscustomobject]@{ Enabled=$Enabled; Minutes=$Minutes; LastActivity=(Get-TaskPloppIdleClock); LastSample=$null }
 }
@@ -79,9 +41,9 @@ function Apply-TaskPloppIdleSettings([switch]$Notify) {
 }
 function Invoke-TaskPloppIdleCheck {
     if(-not $script:IdleState.Enabled) { return }
-    $sample=[TaskPloppIdle.Input]::Read()
+    $sample=(Get-TaskPloppInput)
     if(Test-TaskPloppIdleTimeout $script:IdleState $sample (Get-TaskPloppIdleClock)) {
-        if([TaskPloppIdle.Input]::LockWorkStation()) {
+        if([TaskPloppInterop.User]::LockWorkStation()) {
             Set-TaskPloppMessage 'Notice' 'Automatische PC-Sperre angefordert' "Seit $($script:IdleState.Minutes) Minuten keine erkannte Maus-/Tastaturaktivitaet."
         } else {
             Set-TaskPloppMessage 'Error' 'PC-Sperre konnte nicht angefordert werden' 'Windows hat den Sperraufruf nicht angenommen.'
