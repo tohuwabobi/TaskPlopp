@@ -144,6 +144,29 @@ function Import-TaskPloppTransfer($Data,[string]$StorageRoot=(Join-Path $env:LOC
     catch{throw "Konfiguration gespeichert; Anzeige konnte nicht erneuert werden. Sicherung: $backupPath. $($_.Exception.Message)"}
     return $backupPath
 }
+function New-TaskPloppTransferPicker([switch]$Save) {
+    if($Save){$picker=[Windows.Forms.SaveFileDialog]::new();$picker.DefaultExt='zip';$picker.FileName='TaskPlopp-Konfiguration.zip';$picker.OverwritePrompt=$false;$picker.CreatePrompt=$false}
+    else{$picker=[Windows.Forms.OpenFileDialog]::new()}
+    $picker.Filter='ZIP-Sicherung|*.zip';$picker.CheckFileExists=$false;$picker.CheckPathExists=$false;$picker.ValidateNames=$false
+    return $picker
+}
+function Resolve-TaskPloppTransferFile([string]$Path,[switch]$Save) {
+    $full=[IO.Path]::GetFullPath($Path)
+    if([IO.Path]::GetExtension($full)-ine'.zip'){throw 'Bitte eine ZIP-Datei waehlen.'}
+    if($Save){if(-not[IO.Directory]::Exists([IO.Path]::GetDirectoryName($full))){throw 'Der Zielordner fehlt.'};if($full-ieq[IO.Path]::GetFullPath($script:ConfigPath)){throw 'Die Konfiguration darf nicht ueberschrieben werden.'}}
+    elseif(-not[IO.File]::Exists($full)){throw 'Die ausgewaehlte ZIP-Datei fehlt.'}
+    return $full
+}
+function Select-TaskPloppTransferFile([switch]$Save) {
+    $picker=New-TaskPloppTransferPicker -Save:$Save
+    try{
+        if($picker.ShowDialog($script:TransferDialog)-ne'OK'){return ''}
+        return Resolve-TaskPloppTransferFile $picker.FileName -Save:$Save
+    }finally{$picker.Dispose()}
+}
+function Clear-TaskPloppTransferPreparation($Dialog) {
+    $Dialog.Tag.Pending=$null;$Dialog.Tag.Apply.Enabled=$false
+}
 function Show-TaskPloppTransfer {
     param([scriptblock]$OnShown)
     $existing=Get-Variable TransferDialog -Scope Script -ValueOnly -ErrorAction SilentlyContinue
@@ -152,37 +175,56 @@ function Show-TaskPloppTransfer {
     $dialog=[Windows.Forms.Form]::new();$script:TransferDialog=$dialog
     $dialog.Text='TaskPlopp - Konfiguration sichern/uebertragen';$dialog.Icon=$script:Main.Icon
     $dialog.Size=[Drawing.Size]::new(640,400);$dialog.MinimumSize=$dialog.Size;$dialog.StartPosition='CenterParent';$dialog.Font=$script:Main.Font
-    $actions=[Windows.Forms.FlowLayoutPanel]::new();$actions.Dock='Top';$actions.Height=45
+    $actions=[Windows.Forms.FlowLayoutPanel]::new();$actions.Dock='Top';$actions.AutoSize=$true;$actions.MinimumSize=[Drawing.Size]::new(0,45)
     $export=[Windows.Forms.Button]::new();$export.Name='ExportSettings';$export.Text='Exportieren';$export.AutoSize=$true
     $import=[Windows.Forms.Button]::new();$import.Name='ImportSettings';$import.Text='Importieren';$import.AutoSize=$true
+    $apply=[Windows.Forms.Button]::new();$apply.Name='ApplyTransfer';$apply.Text='Anwenden';$apply.AutoSize=$true;$apply.Enabled=$false
     $close=[Windows.Forms.Button]::new();$close.Name='CloseTransfer';$close.Text='Schliessen';$close.AutoSize=$true;$close.DialogResult='Cancel'
     $text=[Windows.Forms.TextBox]::new();$text.Name='TransferNotice';$text.Multiline=$true;$text.ReadOnly=$true;$text.Dock='Fill';$text.ScrollBars='Vertical'
-    $text.Text='Gespeicherte Einstellungen und direkt verwendete Verknuepfungen sichern. Import ersetzt die gesamte Konfiguration; vorher wird automatisch gesichert.'
-    $actions.Controls.AddRange(@($export,$import,$close));$dialog.Controls.Add($text);$dialog.Controls.Add($actions);$dialog.CancelButton=$close;$dialog.ActiveControl=$export
+    $text.Text='Gespeicherte Einstellungen und Verknuepfungen sichern. Import ersetzt die gesamte Konfiguration; vorher wird automatisch gesichert.'
+    $dialog.Tag=[pscustomobject]@{Pending=$null;Apply=$apply}
+    $actions.Controls.AddRange(@($export,$import,$apply,$close));$dialog.Controls.Add($text);$dialog.Controls.Add($actions);$dialog.CancelButton=$close;$dialog.ActiveControl=$export
     $export.Add_Click({
-        $picker=[Windows.Forms.SaveFileDialog]::new();$picker.Filter='ZIP-Sicherung|*.zip';$picker.DefaultExt='zip';$picker.FileName='TaskPlopp-Konfiguration.zip'
+        Clear-TaskPloppTransferPreparation $dialog
         try{
-            if($picker.ShowDialog($dialog)-ne'OK'){return}
-            $path=Write-TaskPloppTransferZip (Get-TaskPloppTransferData) $picker.FileName -Overwrite
-            $text.Text='Gesichert: '+$path;Set-TaskPloppMessage Success 'Konfiguration exportiert' $path
+            $path=Select-TaskPloppTransferFile -Save
+            if(-not$path){$text.Text='Auswahl abgebrochen.';return}
+            if([IO.File]::Exists($path)){
+                $dialog.Tag.Pending=[pscustomobject]@{Kind='Export';Path=$path;Data=$null};$apply.Enabled=$true
+                $text.Text="Diese ZIP-Datei existiert bereits:`r`n$path`r`n`r`nAnwenden ersetzt sie. Schliessen bricht ab."
+                Set-TaskPloppMessage Notice 'Export zum Ersetzen vorbereitet' $path;return
+            }
+            $written=Write-TaskPloppTransferZip (Get-TaskPloppTransferData) $path
+            $text.Text='Gesichert: '+$written;Set-TaskPloppMessage Success 'Konfiguration exportiert' $written
         }catch{$text.Text=$_.Exception.Message;Set-TaskPloppMessage Error 'Export fehlgeschlagen' $text.Text}
-        finally{$picker.Dispose()}
     })
     $import.Add_Click({
-        $picker=[Windows.Forms.OpenFileDialog]::new();$picker.Filter='ZIP-Sicherung|*.zip'
+        Clear-TaskPloppTransferPreparation $dialog
         try{
             if(-not(Test-TaskPloppImportAllowed)){throw 'Import erst nach Ende von Aufnahme, Erkennung und Einrichtung moeglich.'}
-            if($picker.ShowDialog($dialog)-ne'OK'){return}
-            $data=Read-TaskPloppTransferZip $picker.FileName
-            $old=Get-TaskPloppTransferData -Snapshot
-            $preview="Favoriten: $(@($data.Settings.Programs).Count); Verknuepfungen: $($data.Links.Count).`r`n"+((@(Get-TaskPloppTransferWarnings $data)+@($old.Notes))-join"`r`n")
-            $text.Text=$preview
-            if([Windows.Forms.MessageBox]::Show($dialog,($preview+"`r`n`r`nGesamte Konfiguration ersetzen? Vorher wird gesichert."),'Import anwenden','OKCancel','Question')-ne'OK'){return}
-            $backup=Import-TaskPloppTransfer $data
-            $text.Text='Importiert. Vorherige Konfiguration gesichert: '+$backup;Set-TaskPloppMessage Success 'Konfiguration importiert' ('Sicherung: '+$backup)
-        }catch{$text.Text=$_.Exception.Message;Set-TaskPloppMessage Error 'Import nicht bestaetigt' $text.Text}
-        finally{$picker.Dispose()}
+            $path=Select-TaskPloppTransferFile
+            if(-not$path){$text.Text='Auswahl abgebrochen.';return}
+            $data=Read-TaskPloppTransferZip $path;$old=Get-TaskPloppTransferData -Snapshot
+            $text.Text="Favoriten: $(@($data.Settings.Programs).Count); Verknuepfungen: $($data.Links.Count).`r`n"+((@(Get-TaskPloppTransferWarnings $data)+@($old.Notes))-join"`r`n")+"`r`n`r`nAnwenden ersetzt die gesamte Konfiguration nach vorheriger Sicherung. Schliessen bricht ab."
+            $dialog.Tag.Pending=[pscustomobject]@{Kind='Import';Path=$path;Data=$data};$apply.Enabled=$true
+            Set-TaskPloppMessage Notice 'Import vorbereitet' 'Vorschau pruefen und im Transferdialog Anwenden waehlen.'
+        }catch{$text.Text=$_.Exception.Message;Set-TaskPloppMessage Error 'Import nicht vorbereitet' $text.Text}
+    })
+    $apply.Add_Click({
+        $pending=$dialog.Tag.Pending
+        Clear-TaskPloppTransferPreparation $dialog
+        if($null-eq$pending){return}
+        try{
+            if($pending.Kind-eq'Import'){
+                $backup=Import-TaskPloppTransfer $pending.Data
+                $text.Text='Importiert. Vorherige Konfiguration gesichert: '+$backup
+                Set-TaskPloppMessage Success 'Konfiguration importiert' ('Sicherung: '+$backup)
+            }else{
+                $written=Write-TaskPloppTransferZip (Get-TaskPloppTransferData) $pending.Path -Overwrite
+                $text.Text='Gesichert: '+$written;Set-TaskPloppMessage Success 'Konfiguration exportiert' $written
+            }
+        }catch{$text.Text=$_.Exception.Message;Set-TaskPloppMessage Error 'Anwenden nicht vollstaendig bestaetigt' $text.Text}
     })
     if($OnShown){$dialog.Add_Shown($OnShown)}
-    try{$null=$dialog.ShowDialog($script:Main)}finally{$dialog.Dispose();$script:TransferDialog=$null}
+    try{$null=$dialog.ShowDialog($script:Main)}finally{Clear-TaskPloppTransferPreparation $dialog;$dialog.Dispose();$script:TransferDialog=$null}
 }

@@ -54,15 +54,23 @@ function Set-TaskPloppStatusHostVisible([bool]$Visible) {
     if($Visible){Measure-TaskPloppMessage $script:MessageBar}else{$script:MessageBar.Tag.Timer.Stop()}
 }
 function Set-TaskPloppMessage([string]$Kind,[string]$Summary,[string]$Detail='') {
-    $p=$script:MessageBar;$s=$p.Tag;$s.Activity=''
-    switch($Kind){
-        Success {$prefix='Erfolg';$p.BackColor=[Drawing.Color]::FromArgb(205,239,211)}
-        Error {$prefix='Fehler';$p.BackColor=[Drawing.Color]::FromArgb(255,198,198)}
-        Warning {$prefix='Warnung';$p.BackColor=[Drawing.Color]::FromArgb(255,198,198)}
-        default {$prefix='Hinweis';$p.BackColor=[Drawing.Color]::FromArgb(255,226,163)}
+    $panels=@()
+    foreach($name in 'MessageBar','ConfigurationMessageBar'){
+        $panel=Get-Variable $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if($null-ne$panel-and-not$panel.IsDisposed){$panels+=,$panel}
     }
-    $s.Lines[0]=$prefix+': '+($Summary-replace'[\r\n]',' ');$s.Lines[1]=$Detail-replace'[\r\n]',' '
-    Measure-TaskPloppMessage $p
+    if($panels.Count-eq0){$script:StartupNotice=($Summary+' '+$Detail).Trim();return}
+    foreach($p in $panels){
+        $s=$p.Tag;$s.Activity=''
+        switch($Kind){
+            Success {$prefix='Erfolg';$p.BackColor=[Drawing.Color]::FromArgb(205,239,211)}
+            Error {$prefix='Fehler';$p.BackColor=[Drawing.Color]::FromArgb(255,198,198)}
+            Warning {$prefix='Warnung';$p.BackColor=[Drawing.Color]::FromArgb(255,198,198)}
+            default {$prefix='Hinweis';$p.BackColor=[Drawing.Color]::FromArgb(255,226,163)}
+        }
+        $s.Lines[0]=$prefix+': '+($Summary-replace'[\r\n]',' ');$s.Lines[1]=$Detail-replace'[\r\n]',' '
+        Measure-TaskPloppMessage $p
+    }
 }
 function Set-TaskPloppActivity([string]$Mode,[string]$Detail='') {
     if($Mode-eq'Recording'){Set-TaskPloppMessage Success 'Diktat laeuft' $Detail}else{Set-TaskPloppMessage Notice 'Transkription laeuft' $Detail}

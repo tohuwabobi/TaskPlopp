@@ -84,10 +84,6 @@ function Get-AppWindows {
     }
 }
 
-function Show-Notice([string]$Message) {
-    [void][Windows.Forms.MessageBox]::Show($Message, 'TaskPlopp', 'OK', 'Information')
-}
-
 . (Join-Path $PSScriptRoot 'TaskPlopp.Apps.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Hotkey.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Configuration.ps1')
@@ -113,9 +109,15 @@ if (-not $created -and -not $SmokeTest) {
     return
 }
 
+$script:StartupNotice=''
+$uiExceptionHandler=[Threading.ThreadExceptionEventHandler]{param($sender,$eventArgs)
+    try{Set-TaskPloppMessage Error 'Aktion konnte nicht abgeschlossen werden' $eventArgs.Exception.Message}
+    catch{$script:StartupNotice=$eventArgs.Exception.Message}
+}
+[Windows.Forms.Application]::add_ThreadException($uiExceptionHandler)
 try {
     try { $script:Settings = Get-Settings } catch {
-        Show-Notice "Die Konfiguration konnte nicht gelesen werden. Sie bleibt erhalten.`r`n$($_.Exception.Message)"
+        $script:StartupNotice="Die Konfiguration konnte nicht gelesen werden. Sie bleibt erhalten. $($_.Exception.Message)"
         $script:Settings = ConvertTo-TaskPloppSettings ([pscustomobject]@{ ShowOpenWindows = $true; Programs = @() })
     }
     $script:AppIcon = [Drawing.Icon]::new((Join-Path $PSScriptRoot 'assets\TaskPlopp.ico'))
@@ -123,7 +125,8 @@ try {
     Initialize-TaskPloppKeyboard $script:Main
     $script:Main.Icon = $script:AppIcon
     $script:Main.Text = 'TaskPlopp'
-    $script:Main.Size = [Drawing.Size]::new(580, 650)
+    $workArea = [Windows.Forms.Screen]::FromPoint([Windows.Forms.Cursor]::Position).WorkingArea
+    $script:Main.Size = [Drawing.Size]::new([Math]::Min(760, $workArea.Width - 80), [Math]::Min(1200, $workArea.Height - 80))
     $script:Main.MinimumSize = [Drawing.Size]::new(420, 350)
     $script:Main.StartPosition = 'CenterScreen'
     $script:Main.TopMost = $true
@@ -155,15 +158,25 @@ try {
     $top.ColumnCount=1; $top.RowCount=2; $top.Margin=[Windows.Forms.Padding]::new(0)
     [void]$top.RowStyles.Add([Windows.Forms.RowStyle]::new([Windows.Forms.SizeType]::AutoSize))
     [void]$top.RowStyles.Add([Windows.Forms.RowStyle]::new([Windows.Forms.SizeType]::AutoSize))
-    $toolbar = New-Object Windows.Forms.FlowLayoutPanel
-    $toolbar.Name='Toolbar'; $toolbar.Dock='Fill'; $toolbar.AutoSize=$true; $toolbar.AutoSizeMode='GrowAndShrink'
-    $toolbar.MinimumSize=[Drawing.Size]::new(0,52); $toolbar.Padding=[Windows.Forms.Padding]::new(8)
-    $toolbar.Margin=[Windows.Forms.Padding]::new(0)
+    $script:ContentInset=10
+    $toolbar = New-Object Windows.Forms.TableLayoutPanel
+    $toolbar.Name='Toolbar';$toolbar.Dock='Fill';$toolbar.AutoSize=$true;$toolbar.AutoSizeMode='GrowAndShrink'
+    $toolbar.ColumnCount=2;$toolbar.RowCount=1;$toolbar.Padding=[Windows.Forms.Padding]::new(10,8,10,8)
+    $toolbar.MinimumSize=[Drawing.Size]::new(0,52);$toolbar.Margin=[Windows.Forms.Padding]::new(0)
+    [void]$toolbar.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new([Windows.Forms.SizeType]::Percent,100))
+    [void]$toolbar.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new([Windows.Forms.SizeType]::AutoSize))
+    $toolbarLeft=[Windows.Forms.FlowLayoutPanel]::new();$toolbarLeft.Name='ToolbarLeft'
+    $toolbarLeft.Dock='Fill';$toolbarLeft.AutoSize=$true;$toolbarLeft.WrapContents=$false
+    $toolbarLeft.Margin=[Windows.Forms.Padding]::new(0,0,12,0)
+    $toolbarRight=[Windows.Forms.FlowLayoutPanel]::new();$toolbarRight.Name='ToolbarRight'
+    $toolbarRight.Dock='Fill';$toolbarRight.AutoSize=$true;$toolbarRight.WrapContents=$false
+    $toolbarRight.Margin=[Windows.Forms.Padding]::new(0)
+    $toolbar.Controls.Add($toolbarLeft,0,0);$toolbar.Controls.Add($toolbarRight,1,0)
     $script:ToolbarToolTip=New-Object Windows.Forms.ToolTip
     $script:ToolbarToolTip.ShowAlways=$true
     $script:ToolbarIconFont=[Drawing.Font]::new('Segoe MDL2 Assets',14)
     $script:MessageBar = New-TaskPloppMessageBar
-    $script:MessageBar.Name='Messages'; $script:MessageBar.Dock='Fill'; $script:MessageBar.Margin=[Windows.Forms.Padding]::new(0)
+    $script:MessageBar.Name='Messages'; $script:MessageBar.Dock='Fill'; $script:MessageBar.Margin=[Windows.Forms.Padding]::new(10,3,10,3)
     $script:Main.Add_VisibleChanged({ Set-TaskPloppStatusHostVisible $script:Main.Visible })
     $top.Controls.Add($toolbar,0,0); $top.Controls.Add($script:MessageBar,0,1)
     $script:ListPanel = New-Object Windows.Forms.FlowLayoutPanel
@@ -174,20 +187,23 @@ try {
     $script:Main.Controls.Add($script:ListPanel)
     $script:Main.Controls.Add($top)
 
-    function Add-ToolbarButton([string]$Text, [scriptblock]$Action, [string]$Hint, [switch]$Icon) {
+    function Add-ToolbarButton([string]$Text, [scriptblock]$Action, [string]$Hint, [switch]$Icon, [switch]$Right) {
         $button = New-Object Windows.Forms.Button
         $button.Text=$Text; $button.AutoSize=$false; $button.Height=34
         $button.Width=if($Icon) { 42 } else { 64 }
         if($Icon) { $button.Font=$script:ToolbarIconFont }
         $button.AccessibleName=$Hint
         $script:ToolbarToolTip.SetToolTip($button,$Hint)
-        $button.Add_Click($Action); $toolbar.Controls.Add($button)
+        $group=if($Right){$toolbarRight}else{$toolbarLeft}
+        $button.Margin=[Windows.Forms.Padding]::new(0)
+        if($group.Controls.Count){$group.Controls[$group.Controls.Count-1].Margin=[Windows.Forms.Padding]::new(0,0,6,0)}
+        $button.Add_Click($Action);$group.Controls.Add($button)
         return $button
     }
 
     function Open-Window($Window) {
         if (-not [TaskPloppInterop.User]::IsWindow($Window.Handle)) {
-            Show-Notice 'Dieses Fenster wurde inzwischen geschlossen.'
+            Set-TaskPloppMessage Notice 'Fenster inzwischen geschlossen' 'Bitte einen anderen Eintrag auswaehlen.'
             Update-WindowList
             return
         }
@@ -202,7 +218,7 @@ try {
         if ((Activate-TaskPloppCoveredWindow $Window.Handle $covers)) {
             $script:Main.Hide()
         } else {
-            Show-Notice 'Das Fenster konnte nicht sichtbar aktiviert werden. Eventuell blockiert ein erhoehtes Programm den Wechsel. Bitte Fensterliste aktualisieren und erneut versuchen.'
+            Set-TaskPloppMessage Error 'Fenster konnte nicht aktiviert werden' 'Eventuell blockiert ein erhoehtes Programm den Wechsel. Bitte aktualisieren und erneut versuchen.'
         }
     }
 
@@ -212,8 +228,7 @@ try {
         if ($matches.Count -gt 0) { Open-Window $matches[0]; return }
         $target = Resolve-FavoriteStart $Favorite
         if (-not $target.Kind) {
-            Show-Notice 'Fuer diesen Favoriten fehlt das Startziel. Bitte in der Konfiguration eine Startdatei oder installierte App auswaehlen.'
-            Show-TaskPloppConfiguration
+            Set-TaskPloppMessage Notice 'Startziel fehlt' 'Bitte ueber das Zahnrad eine Startdatei oder installierte App auswaehlen.'
             return
         }
         # Validate before minimizing Citrix; missing files should leave the desktop untouched.
@@ -229,21 +244,22 @@ try {
         $button = New-Object Windows.Forms.Button
         $button.Text = $Text; $button.Tag = [pscustomobject]@{ Target = $Target; IsFavorite = [bool]$Favorite }
         $script:Main.RegisterSelectionButton($button)
-        $button.Size = [Drawing.Size]::new([Math]::Max(340, $script:ListPanel.ClientSize.Width - 42), 48)
+        $button.Size = [Drawing.Size]::new([Math]::Max(1, $script:ListPanel.ClientSize.Width - $script:ListPanel.Padding.Horizontal), 48)
+        $button.Margin=[Windows.Forms.Padding]::new(0,3,0,3)
         $button.TextAlign = 'MiddleLeft'; $button.AutoEllipsis = $true
         $button.FlatStyle = 'Flat'; $button.BackColor = [Drawing.Color]::White
         $button.Add_Click({ param($sender, $eventArgs)
             try {
                 if ($sender.Tag.IsFavorite) { Open-Favorite $sender.Tag.Target }
                 else { Open-Window $sender.Tag.Target }
-            } catch { Show-Notice $_.Exception.Message }
+            } catch { Set-TaskPloppMessage Error 'Aktion fehlgeschlagen' $_.Exception.Message }
         })
         if ($Favorite -and $MatchingWindows.Count -gt 1) {
             $menu = New-Object Windows.Forms.ContextMenuStrip
             foreach ($window in $MatchingWindows) {
                 $item = $menu.Items.Add($window.Title); $item.Tag = $window
                 $item.Add_Click({ param($sender,$eventArgs)
-                    try { Open-Window $sender.Tag } catch { Show-Notice $_.Exception.Message }
+                    try { Open-Window $sender.Tag } catch { Set-TaskPloppMessage Error 'Aktion fehlgeschlagen' $_.Exception.Message }
                 })
             }
             $button.ContextMenuStrip = $menu
@@ -256,7 +272,7 @@ try {
                     $copy = ConvertTo-TaskPloppSettings ($script:Settings | ConvertTo-Json -Depth 8 | ConvertFrom-Json)
                     $copy.Programs = @($copy.Programs) + @(New-FavoriteFromWindow $sender.Tag)
                     Save-Settings $copy; $script:Settings = $copy; Update-WindowList
-                } catch { Show-Notice $_.Exception.Message }
+                } catch { Set-TaskPloppMessage Error 'Aktion fehlgeschlagen' $_.Exception.Message }
             })
             $hide = $menu.Items.Add('Dieses Programm ausblenden'); $hide.Tag = $Target
             $hide.Add_Click({ param($sender, $eventArgs)
@@ -268,7 +284,7 @@ try {
                         ExecutablePath = $window.ExecutablePath; AppId = $window.AppId; TitleContains = ''
                     })
                     Save-Settings $copy; $script:Settings = $copy; Update-WindowList
-                } catch { Show-Notice $_.Exception.Message }
+                } catch { Set-TaskPloppMessage Error 'Aktion fehlgeschlagen' $_.Exception.Message }
             })
             $button.ContextMenuStrip = $menu
         }
@@ -281,7 +297,8 @@ try {
     function Add-Heading([string]$Text) {
         $label = New-Object Windows.Forms.Label
         $label.Text = $Text; $label.AutoSize = $true
-        $label.Margin = [Windows.Forms.Padding]::new(3, 12, 3, 8)
+        $label.Margin = [Windows.Forms.Padding]::new(0,12,0,8)
+        $label.MaximumSize=[Drawing.Size]::new([Math]::Max(1,$script:ListPanel.ClientSize.Width-$script:ListPanel.Padding.Horizontal),0)
         $script:ListPanel.Controls.Add($label)
     }
 
@@ -305,8 +322,9 @@ try {
         } finally { $script:ListPanel.ResumeLayout() }
     }
 
-    $null = Add-ToolbarButton ([string][char]0xE72C) { Show-TaskPloppView } -Hint 'Aktuelle Ansicht aktualisieren' -Icon
-    $script:ConfigurationButton = Add-ToolbarButton ([string][char]0xE713) { Show-TaskPloppConfiguration } -Hint 'Konfiguration oeffnen (Rechtsklick: sichern/uebertragen)' -Icon
+    $script:RefreshButton = Add-ToolbarButton ([string][char]0xE72C) { Show-TaskPloppView } -Hint 'Aktuelle Ansicht aktualisieren' -Icon -Right
+    $script:RefreshButton.Name='RefreshButton'
+    $script:ConfigurationButton = Add-ToolbarButton ([string][char]0xE713) { Show-TaskPloppConfiguration } -Hint 'Konfiguration oeffnen (Rechtsklick: sichern/uebertragen)' -Icon -Right
     $script:ConfigurationButton.Name='ConfigurationButton'
     $transferMenu=[Windows.Forms.ContextMenuStrip]::new()
     $transferItem=$transferMenu.Items.Add('Konfiguration sichern/uebertragen')
@@ -314,10 +332,11 @@ try {
     $script:ConfigurationButton.ContextMenuStrip=$transferMenu
     $null = Add-ToolbarButton 'Citrix' {
         $citrix = @(Get-AppWindows -Raw | Where-Object { $_.ProcessName -in $script:CitrixProcesses })
-        if ($citrix.Count -eq 0) { Show-Notice 'Kein sichtbares Citrix-Fenster gefunden.'; return }
+        if ($citrix.Count -eq 0) { Set-TaskPloppMessage Notice 'Kein sichtbares Citrix-Fenster gefunden' ''; return }
         foreach ($window in $citrix) { $null=Minimize-TaskPloppWindow $window.Handle }
         $script:Main.Close()
     } -Hint 'Citrix-Fenster minimieren'
+    $toolbarLeft.Controls[0].Name='CitrixButton'
     $script:AudioButton = Add-ToolbarButton 'Audio' {
         if ($script:CurrentView -eq 'Audio') { Show-TaskPloppView 'Tasks' }
         else { Show-TaskPloppView 'Audio' }
@@ -348,15 +367,32 @@ try {
     $script:DictationButton.ContextMenuStrip=$dictationMenu
     Update-TaskPloppDictationButton
 
-    $script:ListPanel.Add_SizeChanged({
-        foreach ($control in $script:ListPanel.Controls) {
-            if ($script:CurrentView -eq 'Tasks' -and $control -is [Windows.Forms.Button]) {
-                $control.Width = [Math]::Max(340, $script:ListPanel.ClientSize.Width - 42)
-            } elseif ($script:CurrentView -eq 'Audio' -and $control.Name -eq 'AudioColumns') {
-                $control.Size=[Drawing.Size]::new([Math]::Max(200,$script:ListPanel.ClientSize.Width-20),[Math]::Max(60,$script:ListPanel.ClientSize.Height-20))
+    $script:UpdatingContentLayout=$false
+    function Update-TaskPloppContentLayout {
+        if($script:UpdatingContentLayout){return}
+        $script:UpdatingContentLayout=$true
+        try{
+            $inset=$script:ContentInset
+            $scroll=if($script:CurrentView-eq'Tasks'-and$script:ListPanel.VerticalScroll.Visible){[Windows.Forms.SystemInformation]::VerticalScrollBarWidth}else{0}
+            $padding=[Windows.Forms.Padding]::new($inset+$scroll,10,$inset,10)
+            if($script:ListPanel.Padding-ne$padding){$script:ListPanel.Padding=$padding}
+            $margin=[Windows.Forms.Padding]::new($inset+$scroll,3,$inset+$scroll,3)
+            if($script:MessageBar.Margin-ne$margin){$script:MessageBar.Margin=$margin}
+            $width=[Math]::Max(1,$script:ListPanel.ClientSize.Width-$script:ListPanel.Padding.Horizontal)
+            foreach($control in $script:ListPanel.Controls){
+                if($script:CurrentView-eq'Tasks'){
+                    if($control-is[Windows.Forms.Button]){if($control.Width-ne$width){$control.Width=$width}}
+                    elseif($control-is[Windows.Forms.Label]){$maximum=[Drawing.Size]::new($width,0);if($control.MaximumSize-ne$maximum){$control.MaximumSize=$maximum}}
+                }elseif($control.Name-eq'AudioColumns'){
+                    $size=[Drawing.Size]::new($width,[Math]::Max(1,$script:ListPanel.ClientSize.Height-$script:ListPanel.Padding.Vertical))
+                    if($control.Size-ne$size){$control.Size=$size}
+                }
             }
-        }
-    })
+        }finally{$script:UpdatingContentLayout=$false}
+    }
+    $script:ListPanel.Add_Layout({Update-TaskPloppContentLayout})
+    $script:ListPanel.Add_SizeChanged({Update-TaskPloppContentLayout})
+    $script:Main.Add_FontChanged({Update-TaskPloppContentLayout})
     if (-not $SmokeTest -and -not $ResidentTest) {
         . (Join-Path $PSScriptRoot 'Start-TaskPlopp.ps1') -LibraryOnly
         $script:Tray = New-Object Windows.Forms.NotifyIcon
@@ -377,7 +413,7 @@ try {
         } catch {
             $script:Tray.Text = 'TaskPlopp: Hotkey belegt'
             $label=(Get-TaskPloppHotkeySpec $script:Settings).Label
-            $script:Tray.ShowBalloonTip(5000, 'TaskPlopp', "$label ist nicht verfuegbar. Bitte TaskPlopp ueber dieses Symbol oeffnen und die Tastenkombination in der Konfiguration aendern.", [Windows.Forms.ToolTipIcon]::Warning)
+            $script:StartupNotice+=" $label ist nicht verfuegbar. Bitte die Tastenkombination ueber das Zahnrad aendern."
         }
     }
     $timer = New-Object Windows.Forms.Timer
@@ -390,6 +426,8 @@ try {
     $script:Main.Add_Shown({ Raise-TaskPloppWindow $script:Main.Handle })
     if($OnShown) { $script:Main.Add_Shown($OnShown) }
     Update-WindowList
+    Update-TaskPloppContentLayout
+    if($script:StartupNotice){Set-TaskPloppMessage Error 'Start nicht vollstaendig' $script:StartupNotice}
     $timer.Start()
     $dictationTimer=New-Object Windows.Forms.Timer
     $dictationTimer.Interval=100
@@ -428,6 +466,7 @@ try {
     }
     [Windows.Forms.Application]::Run($script:Main)
 } finally {
+    [Windows.Forms.Application]::remove_ThreadException($uiExceptionHandler)
     if(Get-Variable dictationTimer -ErrorAction SilentlyContinue){$dictationTimer.Dispose()}
     Close-TaskPloppDictation
     if(Get-Variable transferMenu -ErrorAction SilentlyContinue){$transferMenu.Dispose()}

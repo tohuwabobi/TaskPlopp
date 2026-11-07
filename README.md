@@ -30,7 +30,7 @@ im Infobereich laeuft. Rechtsklick darauf: **TaskPlopp beenden**. Nach der naech
 Windows-Anmeldung einmal die Desktop-Verknuepfung starten. Kein Autostart.
 Der Hotkey wird ueber die Windows-API RegisterHotKey registriert; die Verknuepfung
 selbst hat keine Tastenkombination mehr. Falls die Kombination bereits belegt ist,
-erscheint ein Hinweis am TaskPlopp-Symbol; die GUI bleibt ueber das Symbol erreichbar.
+erscheint der Hinweis in der Statusleiste; die GUI bleibt ueber das Symbol erreichbar.
 
 Unter **Konfiguration > Tastenkombination** lassen sich Strg, Alt, Umschalt und Win
 mit A-Z, 0-9 oder einer Funktionstaste kombinieren. Mindestens eine Zusatztaste ist
@@ -68,6 +68,10 @@ Die obere Leiste nutzt kompakte Symbole: kreisender Pfeil fuer Aktualisieren,
 Zahnrad fuer Konfiguration, **Citrix** zum Minimieren und in der Audioansicht einen
 Zurueck-Pfeil statt des langen Buttontexts. Beim Darueberfahren nennt ein Tooltip
 die Funktion. Die Symbole stammen aus der Windows-Schrift Segoe MDL2 Assets.
+Citrix, Audio, Sperre und Diktat stehen links; Aktualisieren und Zahnrad rechts.
+Statusleiste und breite Taskbuttons haben gleiche Aussenkanten und symmetrische
+Abstaende. Der vorhandene Fensterhintergrund bildet den dezenten Statusrahmen.
+Das groessere Startfenster nutzt bis zu 760 x 1200 Pixel und bleibt bildschirmbegrenzt.
 
 Erfolg erscheint erst nach Ruecklesen aller drei Rollen. **[Aktiv]** bedeutet,
 dass alle Rollen dasselbe Geraet nutzen; andernfalls stehen die einzelnen Rollen
@@ -88,7 +92,10 @@ Hinweise orange, Warnungen/Fehler rot und Erfolge gruen. Die erste Zeile nennt
 Art und Aussage, die zweite das Detail. Nur zu lange Texte laufen horizontal;
 es gibt dort keine Scrollbar. Eine neue Meldung ersetzt die alte, ohne Verlauf
 oder automatische Ablaufzeit. Bei verstecktem Fenster ruht die Laufschrift.
-Bestehende Meldungsboxen fuer Favoriten und Konfiguration bleiben erhalten.
+Auch Favoriten-, Fenster-, Start- und Konfigurationsfehler erscheinen hier, ohne
+Meldungsboxen oder Tray-Sprechblasen. In der offenen Konfiguration gibt es dieselbe
+zweizeilige Leiste, damit Fehler dort sichtbar bleiben. Keine automatische Oeffnung
+der Konfiguration bei fehlendem Favoritenziel; dazu das Zahnrad verwenden.
 
 Die Audio-Core-Logik und Geraetefarben stammen aus dem lokalen TDAudioSwitch,
 liegen aber vollstaendig im TaskPlopp-Repository. COM-Signaturen wurden korrigiert;
@@ -299,8 +306,9 @@ unveraendert, einschliesslich Argumenten und Arbeitsverzeichnis; mehrfach verwen
 Links werden einmal mitgenommen. EXE-Dateien, Chrome-Profile, Audio-/Diktatmodelle,
 Windows-Audiostandards und Autostarteinrichtung werden nicht mitgesichert.
 
-Import zeigt Favoriten-/Linkanzahl und Hinweise auf fehlende Ziele. Nach Bestaetigung
-ersetzt er die ganze Konfiguration. Vorher entsteht eine ZIP unter
+Importieren zeigt Favoriten-/Linkanzahl und Hinweise auf fehlende Ziele. Erst
+**Anwenden** im selben Dialog ersetzt die ganze Konfiguration. **Schliessen** bricht
+ab; die Vorschau allein veraendert nichts. Vorher entsteht eine ZIP unter
 `%LOCALAPPDATA%\TaskPlopp\Backups`, einschliesslich exakter alter Configdatei als
 `config-original.json`. Beschaedigte alte JSON-Dateien werden als Rohsicherung mit
 Hinweis erhalten und sperren einen gueltigen Restore nicht. Eine solche reine
@@ -318,9 +326,18 @@ Import ist waehrend Aufnahme, Transkription oder Einrichtung gesperrt, Export bl
 moeglich. Hotkeykonflikte werden gemeldet. Bei einem Fehler nach dem Schreibpunkt
 bleiben die neuen Linkkopien erhalten; der Dialog nennt den Sicherungspfad und weist
 auf den zu pruefenden gespeicherten Stand hin. Kein stiller Rollback oder Retry.
+
+Export in eine neue ZIP erfolgt direkt. Fuer eine vorhandene ZIP erscheint der
+Ersetz-Hinweis im Transferdialog; erst **Anwenden** ueberschreibt die Datei. Es gibt
+keine zusaetzliche Bestaetigungsbox. Eine neue Auswahl, Abbruch oder ein Fehler
+verwirft die alte Vorbereitung, sodass Anwenden sie nicht versehentlich wiederholt.
+Konfiguration, Auswahlfenster, Dateiauswahl und Hover-Tooltips bleiben ausdruecklich
+aufrufbare Bedienhilfen.
+
 ## Pruefung
 
 ```powershell
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppLayout.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppNative.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppTransfer.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppTransferUi.ps1
@@ -401,3 +418,9 @@ Oeffnung und Schliessen. Echte Uebertragung auf einen anderen PC bleibt ein Prax
 Die eigene Lupe mit Plopp-Stern liegt unter `assets\TaskPlopp.ico` und wird fuer
 Fenster, Infobereich und Desktop-Verknuepfung verwendet. SVG und PNG liegen daneben.
 `Build-Icon.ps1` erzeugt aus den Zeichenbefehlen neun ICO-Aufloesungen (16 bis 256 px).
+
+Der Layouttest verwendet isolierte Favoriten und misst gleiche Raender/Kanten,
+Toolbargruppen und lange Ueberschriften bei kleiner/grosser Ansicht und Schrift.
+Er prueft Statusmeldungen statt Popups, sichtbare Konfigurationsfehler, Startupfehler
+und Abmeldung des GUI-Exceptionhandlers ohne Fremdfensteraktionen. Reale DPI- und
+Citrix-Pruefungen bleiben Praxisbelege.

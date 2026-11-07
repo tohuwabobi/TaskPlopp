@@ -22,6 +22,11 @@
     finally { $picker.Dispose() }
 }
 
+function Resolve-TaskPloppProgramFile([string]$Path) {
+    $full=[IO.Path]::GetFullPath($Path)
+    if([IO.Path]::GetExtension($full)-notin@('.exe','.lnk')-or-not(Test-Path -LiteralPath $full -PathType Leaf)){throw 'Bitte eine vorhandene EXE- oder LNK-Datei auswaehlen.'}
+    return $full
+}
 function Select-TaskPloppFile {
     $owner = [Windows.Forms.Form]::ActiveForm
     if ($null -eq $owner) { $owner = $script:Main }
@@ -29,7 +34,12 @@ function Select-TaskPloppFile {
     $file.Title = 'Programm oder Startverknuepfung auswaehlen'
     $file.Filter = 'Programme und Verknuepfungen|*.exe;*.lnk'
     $file.DereferenceLinks = $false
-    try { if ($file.ShowDialog($owner) -eq 'OK') { return $file.FileName } }
+    $file.CheckFileExists=$false;$file.CheckPathExists=$false;$file.ValidateNames=$false
+    try {
+        if($file.ShowDialog($owner)-eq'OK'){
+            return Resolve-TaskPloppProgramFile $file.FileName
+        }
+    }
     finally { $file.Dispose() }
     return ''
 }
@@ -275,7 +285,7 @@ function Show-TaskPloppConfiguration {
                 $entry = $favoriteList.SelectedItem; $entry.StartKind = 'Path'; $entry.StartTarget = $path
                 $targetBox.Text = $path
             }
-        } catch { Show-Notice $_.Exception.Message }
+        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
     })
     $appButton.Add_Click({
         try {
@@ -285,7 +295,7 @@ function Show-TaskPloppConfiguration {
                 $entry.StartKind = 'AppId'; $entry.StartTarget = $app.AppId; $entry.AppId = $app.AppId
                 $entry.ExecutablePath = ''; $targetBox.Text = $app.AppId
             }
-        } catch { Show-Notice $_.Exception.Message }
+        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
     })
     $addWindow.Add_Click({
         try {
@@ -297,7 +307,7 @@ function Show-TaskPloppConfiguration {
                 $entry = New-FavoriteFromWindow $window
                 [void]$favoriteList.Items.Add($entry); $favoriteList.SelectedItem = $entry
             }
-        } catch { Show-Notice $_.Exception.Message }
+        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
     })
     $addFile.Add_Click({
         try {
@@ -311,7 +321,7 @@ function Show-TaskPloppConfiguration {
                 if ([IO.Path]::GetExtension($path) -ieq '.exe') { $entry.ExecutablePath = $path }
                 [void]$favoriteList.Items.Add($entry); $favoriteList.SelectedItem = $entry
             }
-        } catch { Show-Notice $_.Exception.Message }
+        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
     })
     $addApp.Add_Click({
         try {
@@ -321,7 +331,7 @@ function Show-TaskPloppConfiguration {
                     ExecutablePath = ''; AppId = $app.AppId; StartKind = 'AppId'; StartTarget = $app.AppId; LaunchAlways = $false; FolderPath = '' }
                 [void]$favoriteList.Items.Add($entry); $favoriteList.SelectedItem = $entry
             }
-        } catch { Show-Notice $_.Exception.Message }
+        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
     })
     $remove.Add_Click({ if ($favoriteList.SelectedIndex -ge 0) { $favoriteList.Items.RemoveAt($favoriteList.SelectedIndex) } })
 
@@ -369,14 +379,21 @@ function Show-TaskPloppConfiguration {
             Apply-TaskPloppIdleSettings -Notify
             if($hotkeyChanged){Set-TaskPloppMessage 'Success' 'Tastenkombination gespeichert' (Get-TaskPloppHotkeySpec $working).Label}
             $dialog.DialogResult = 'OK'
-        } catch { Show-Notice $_.Exception.Message }
+        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
     })
     $footer.Controls.AddRange(@($show,$save,$cancel))
-    $dialog.Controls.Add($tabs); $dialog.Controls.Add($footer); $dialog.CancelButton = $cancel
+    $script:ConfigurationMessageBar=New-TaskPloppMessageBar
+    $script:ConfigurationMessageBar.Name='ConfigurationMessages';$script:ConfigurationMessageBar.Dock='Fill'
+    $script:ConfigurationMessageBar.Margin=[Windows.Forms.Padding]::new(0)
+    $footerHost=[Windows.Forms.TableLayoutPanel]::new();$footerHost.Dock='Bottom';$footerHost.AutoSize=$true;$footerHost.AutoSizeMode='GrowAndShrink'
+    $footerHost.ColumnCount=1;$footerHost.RowCount=2;$footerHost.Padding=[Windows.Forms.Padding]::new(10,3,10,3)
+    $footer.Margin=[Windows.Forms.Padding]::new(0);$footer.Dock='Fill'
+    $footerHost.Controls.Add($script:ConfigurationMessageBar,0,0);$footerHost.Controls.Add($footer,0,1)
+    $dialog.Controls.Add($tabs);$dialog.Controls.Add($footerHost);$dialog.CancelButton=$cancel
     $editor.Enabled = $false
     if ($favoriteList.Items.Count -gt 0) { $favoriteList.SelectedIndex = 0 }
     if ($OnShown) { $dialog.Add_Shown($OnShown) }
     $script:ConfigurationOpen=$true
-    try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$dictationStatusTimer.Dispose();$dialog.Dispose() }
+    try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
     Show-TaskPloppView
 }
