@@ -48,7 +48,11 @@ function Show-TaskPloppView([ValidateSet('Tasks','Audio')][string]$View = $scrip
     $script:CurrentView = $View
     $script:Main.AudioView = ($View -eq 'Audio')
     $script:ListPanel.AutoScroll = ($View -eq 'Tasks')
-    $script:AudioButton.Text = if ($View -eq 'Audio') { 'Zurueck zu Tasks' } else { 'Audio' }
+    $script:AudioButton.Text = if ($View -eq 'Audio') { [string][char]0xE72B } else { 'Audio' }
+    $script:AudioButton.Font = if ($View -eq 'Audio') { $script:ToolbarIconFont } else { $script:Main.Font }
+    $hint=if($View -eq 'Audio') { 'Zurueck zu Tasks (Escape)' } else { 'Lautsprecher und Mikrofone auswaehlen' }
+    $script:AudioButton.AccessibleName=$hint
+    $script:ToolbarToolTip.SetToolTip($script:AudioButton,$hint)
     if ($View -eq 'Audio') { Update-TaskPloppAudioView } else { Update-WindowList }
 }
 function Update-TaskPloppAudioView {

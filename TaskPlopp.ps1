@@ -271,6 +271,9 @@ try {
     $toolbar.Name='Toolbar'; $toolbar.Dock='Fill'; $toolbar.AutoSize=$true; $toolbar.AutoSizeMode='GrowAndShrink'
     $toolbar.MinimumSize=[Drawing.Size]::new(0,52); $toolbar.Padding=[Windows.Forms.Padding]::new(8)
     $toolbar.Margin=[Windows.Forms.Padding]::new(0)
+    $script:ToolbarToolTip=New-Object Windows.Forms.ToolTip
+    $script:ToolbarToolTip.ShowAlways=$true
+    $script:ToolbarIconFont=[Drawing.Font]::new('Segoe MDL2 Assets',14)
     $script:MessageBar = New-Object TaskPlopp.MessageBar
     $script:MessageBar.Name='Messages'; $script:MessageBar.Dock='Fill'; $script:MessageBar.Margin=[Windows.Forms.Padding]::new(0)
     $script:Main.Add_VisibleChanged({ $script:MessageBar.SetHostVisible($script:Main.Visible) })
@@ -283,9 +286,13 @@ try {
     $script:Main.Controls.Add($script:ListPanel)
     $script:Main.Controls.Add($top)
 
-    function Add-ToolbarButton([string]$Text, [scriptblock]$Action) {
+    function Add-ToolbarButton([string]$Text, [scriptblock]$Action, [string]$Hint, [switch]$Icon) {
         $button = New-Object Windows.Forms.Button
-        $button.Text = $Text; $button.AutoSize = $true; $button.Height = 32
+        $button.Text=$Text; $button.AutoSize=$false; $button.Height=34
+        $button.Width=if($Icon) { 42 } else { 64 }
+        if($Icon) { $button.Font=$script:ToolbarIconFont }
+        $button.AccessibleName=$Hint
+        $script:ToolbarToolTip.SetToolTip($button,$Hint)
         $button.Add_Click($Action); $toolbar.Controls.Add($button)
         return $button
     }
@@ -410,18 +417,18 @@ try {
         } finally { $script:ListPanel.ResumeLayout() }
     }
 
-    $null = Add-ToolbarButton 'Aktualisieren' { Show-TaskPloppView }
-    $null = Add-ToolbarButton 'Konfiguration' { Show-TaskPloppConfiguration }
-    $null = Add-ToolbarButton 'Citrix minimieren' {
+    $null = Add-ToolbarButton ([string][char]0xE72C) { Show-TaskPloppView } -Hint 'Aktuelle Ansicht aktualisieren' -Icon
+    $null = Add-ToolbarButton ([string][char]0xE713) { Show-TaskPloppConfiguration } -Hint 'Konfiguration oeffnen' -Icon
+    $null = Add-ToolbarButton 'Citrix' {
         $citrix = @(Get-AppWindows -Raw | Where-Object { $_.ProcessName -in $script:CitrixProcesses })
         if ($citrix.Count -eq 0) { Show-Notice 'Kein sichtbares Citrix-Fenster gefunden.'; return }
         foreach ($window in $citrix) { [void][TaskPlopp.Native]::Minimize($window.Handle) }
         $script:Main.Close()
-    }
+    } -Hint 'Citrix-Fenster minimieren'
     $script:AudioButton = Add-ToolbarButton 'Audio' {
         if ($script:CurrentView -eq 'Audio') { Show-TaskPloppView 'Tasks' }
         else { Show-TaskPloppView 'Audio' }
-    }
+    } -Hint 'Lautsprecher und Mikrofone auswaehlen'
     $script:AudioButton.Name='AudioToggle'
     $script:Main.add_BackRequested({ Show-TaskPloppView 'Tasks' })
     $script:ListPanel.Add_SizeChanged({
@@ -503,6 +510,8 @@ try {
     if (Get-Variable timer -ErrorAction SilentlyContinue) { $timer.Dispose() }
     if (Get-Variable smokeTimer -ErrorAction SilentlyContinue) { $smokeTimer.Dispose() }
     if (Get-Variable Main -Scope Script -ErrorAction SilentlyContinue) { $script:Main.Dispose() }
+    if (Get-Variable ToolbarToolTip -Scope Script -ErrorAction SilentlyContinue) { $script:ToolbarToolTip.Dispose() }
+    if (Get-Variable ToolbarIconFont -Scope Script -ErrorAction SilentlyContinue) { $script:ToolbarIconFont.Dispose() }
     if (Get-Variable AppIcon -Scope Script -ErrorAction SilentlyContinue) { $script:AppIcon.Dispose() }
     $script:WakeEvent.Dispose()
 }

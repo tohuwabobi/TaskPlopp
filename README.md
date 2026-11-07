@@ -45,6 +45,12 @@ powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\TaskPlopp.ps1
 **Audio** in der oberen Leiste ersetzt die Taskbuttons im selben Fenster durch
 zwei Spalten: Lautsprecher und Mikrofone. Ein Klick oder die beschriftete Taste
 setzt das Geraet als Windows-Standard fuer Console, Multimedia und Kommunikation.
+
+Die obere Leiste nutzt kompakte Symbole: kreisender Pfeil fuer Aktualisieren,
+Zahnrad fuer Konfiguration, **Citrix** zum Minimieren und in der Audioansicht einen
+Zurueck-Pfeil statt des langen Buttontexts. Beim Darueberfahren nennt ein Tooltip
+die Funktion. Die Symbole stammen aus der Windows-Schrift Segoe MDL2 Assets.
+
 Erfolg erscheint erst nach Ruecklesen aller drei Rollen. **[Aktiv]** bedeutet,
 dass alle Rollen dasselbe Geraet nutzen; andernfalls stehen die einzelnen Rollen
 an den jeweils verwendeten Geraeten. Zusammengehoerige Geraete erhalten dieselbe Farbe.

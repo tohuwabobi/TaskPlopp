@@ -35,6 +35,7 @@ $global:TaskPloppUiFailure=$null
         [Windows.Forms.Application]::DoEvents()
         $top=$sender.Controls.Find('TopArea',$true)[0]
         $toolbar=$sender.Controls.Find('Toolbar',$true)[0]
+        Assert (@($toolbar.Controls | ForEach-Object Top | Select-Object -Unique).Count -eq 1) 'Kompakte Toolbar bricht bei Minimumgroesse um.'
         Assert ($bar.Top -ge $toolbar.Bottom -and $content.Top -ge $top.Bottom) 'Toolbar/Meldungen ueberdecken den Inhalt.'
         $grid=$content.Controls[0]
         foreach($column in $grid.Controls) {
