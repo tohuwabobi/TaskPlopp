@@ -128,6 +128,40 @@ function Show-TaskPloppConfiguration {
     & $updateDictationConfiguration
     $dictationStatusTimer.Add_Tick($updateDictationConfiguration)
     $dictationStatusTimer.Start()
+    $hotkeyTab=New-Object Windows.Forms.TabPage
+    $hotkeyTab.Name='HotkeyTab';$hotkeyTab.Text='Tastenkombination'
+    $hotkeyLayout=New-Object Windows.Forms.FlowLayoutPanel
+    $hotkeyLayout.Dock='Fill';$hotkeyLayout.FlowDirection='TopDown';$hotkeyLayout.WrapContents=$false
+    $hotkeyLayout.Padding=[Windows.Forms.Padding]::new(16)
+    $hotkeyLabel=New-Object Windows.Forms.Label
+    $hotkeyLabel.Text='TaskPlopp global oeffnen:';$hotkeyLabel.AutoSize=$true
+    $hotkeyModifiers=New-Object Windows.Forms.FlowLayoutPanel
+    $hotkeyModifiers.AutoSize=$true;$hotkeyModifiers.WrapContents=$false
+    $hotkeyChecks=@()
+    foreach($item in @(@('Strg',2),@('Alt',1),@('Umschalt',4),@('Win',8))){
+        $check=New-Object Windows.Forms.CheckBox
+        $check.Name='HotkeyModifier'+$item[1];$check.Text=$item[0];$check.Tag=[int]$item[1];$check.AutoSize=$true
+        $check.Checked=($working.HotkeyModifiers -band $check.Tag) -ne 0
+        $hotkeyChecks+=$check;[void]$hotkeyModifiers.Controls.Add($check)
+    }
+    $hotkeyKey=New-Object Windows.Forms.ComboBox
+    $hotkeyKey.Name='HotkeyKey';$hotkeyKey.DropDownStyle='DropDownList';$hotkeyKey.Width=160
+    $keys=@(1..24 | Where-Object {$_ -ne 12} | ForEach-Object {"F$_"})+@(65..90 | ForEach-Object {[string][char]$_})+@(0..9 | ForEach-Object {[string]$_})
+    $hotkeyKey.Items.AddRange([object[]]$keys);$hotkeyKey.SelectedItem=$working.HotkeyKey
+    $hotkeyPreview=New-Object Windows.Forms.Label
+    $hotkeyPreview.Name='HotkeyPreview';$hotkeyPreview.AutoSize=$true
+    $updateHotkeyPreview={
+        $bits=0;foreach($check in $hotkeyChecks){if($check.Checked){$bits=$bits -bor [int]$check.Tag}}
+        $hotkeyPreview.Text=if($bits){'Auswahl: '+(Get-TaskPloppHotkeySpec ([pscustomobject]@{HotkeyModifiers=$bits;HotkeyKey=[string]$hotkeyKey.SelectedItem})).Label}else{'Bitte mindestens eine Zusatztaste waehlen.'}
+    }
+    foreach($check in $hotkeyChecks){$check.Add_CheckedChanged($updateHotkeyPreview)}
+    $hotkeyKey.Add_SelectedIndexChanged($updateHotkeyPreview)
+    & $updateHotkeyPreview
+    $hotkeyHelp=New-Object Windows.Forms.Label
+    $hotkeyHelp.AutoSize=$true;$hotkeyHelp.MaximumSize=[Drawing.Size]::new(700,0)
+    $hotkeyHelp.Text="Speichern prueft und aktiviert die Kombination sofort.`r`nIst sie belegt, bleiben bisherige Kombination und Einstellungen erhalten.`r`nStandard: Strg+Alt+F10. F12 ist fuer Windows reserviert.`r`nCitrix kann Tastenkombinationen an die entfernte Sitzung weiterreichen.`r`nBitte die gewaehlte Kombination auch im Citrix-Vollbild testen."
+    $hotkeyLayout.Controls.AddRange(@($hotkeyLabel,$hotkeyModifiers,$hotkeyKey,$hotkeyPreview,$hotkeyHelp))
+    $hotkeyTab.Controls.Add($hotkeyLayout);[void]$tabs.TabPages.Add($hotkeyTab)
 
     $favoriteList = New-Object Windows.Forms.ListBox
     $favoriteList.Name = 'FavoriteList'
@@ -317,6 +351,9 @@ function Show-TaskPloppConfiguration {
             $working.AutoLockEnabled=[bool]$lockEnabled.Checked
             $working.AutoLockMinutes=[int]$lockMinutes.Value
             $working.DictationEngine=if($dictationChoice.SelectedIndex -eq 1){'Vosk'}else{'Whisper'}
+            $working.HotkeyModifiers=0
+            foreach($check in $hotkeyChecks){if($check.Checked){$working.HotkeyModifiers=$working.HotkeyModifiers -bor [int]$check.Tag}}
+            $working.HotkeyKey=[string]$hotkeyKey.SelectedItem
             foreach ($entry in $working.Programs) {
                 $entry.Name = $entry.Name.Trim(); $entry.ProcessName = $entry.ProcessName.Trim()
                 if (-not $entry.Name -or -not $entry.ProcessName) { throw 'Bitte Buttonname und Programmkennung ausfuellen.' }
@@ -325,9 +362,12 @@ function Show-TaskPloppConfiguration {
                     $entry.StartKind = $target.Kind; $entry.StartTarget = $target.Target
                 }
             }
-            Save-Settings $working
+            $hotkeyChanged=$script:Settings.HotkeyModifiers -ne $working.HotkeyModifiers -or $script:Settings.HotkeyKey -ne $working.HotkeyKey
+            Save-TaskPloppSettingsWithHotkey $working
             $script:Settings = $working
+            Update-TaskPloppTrayText
             Apply-TaskPloppIdleSettings -Notify
+            if($hotkeyChanged){Set-TaskPloppMessage 'Success' 'Tastenkombination gespeichert' (Get-TaskPloppHotkeySpec $working).Label}
             $dialog.DialogResult = 'OK'
         } catch { Show-Notice $_.Exception.Message }
     })

@@ -18,13 +18,26 @@ Einmal in Windows PowerShell ausfuehren:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\CodexProjekte\TaskPlopp\Install-Shortcut.ps1
 ```
 
-Die Desktop-Verknuepfung startet TaskPlopp und aktiviert **Strg+Alt+F10**.
+Die Desktop-Verknuepfung startet TaskPlopp und aktiviert die gespeicherte globale
+Tastenkombination, standardmaessig **Strg+Alt+F10**.
 Der Hotkey bleibt nach dem Schliessen der GUI aktiv, solange das TaskPlopp-Symbol
 im Infobereich laeuft. Rechtsklick darauf: **TaskPlopp beenden**. Nach der naechsten
 Windows-Anmeldung einmal die Desktop-Verknuepfung starten. Kein Autostart.
 Der Hotkey wird ueber die Windows-API RegisterHotKey registriert; die Verknuepfung
 selbst hat keine Tastenkombination mehr. Falls die Kombination bereits belegt ist,
 erscheint ein Hinweis am TaskPlopp-Symbol; die GUI bleibt ueber das Symbol erreichbar.
+
+Unter **Konfiguration > Tastenkombination** lassen sich Strg, Alt, Umschalt und Win
+mit A-Z, 0-9 oder einer Funktionstaste kombinieren. Mindestens eine Zusatztaste ist
+erforderlich; F12 bleibt entsprechend der Windows-Vorgabe ausgespart. Die Vorschau
+zeigt die Auswahl. **Speichern** registriert die neue Kombination sofort, ohne
+Neustart. Bei Belegung oder Speicherfehler bleiben die alte Kombination und die
+gespeicherten Einstellungen erhalten. **Abbrechen** aendert nichts. Dieselbe
+gespeicherte Kombination wird beim naechsten Programmstart wieder registriert und
+im Infobereich angezeigt. Die Desktop-Verknuepfung selbst braucht keine Aenderung.
+Windows-Kombinationen koennen vom Betriebssystem reserviert sein; die Weiterleitung
+innerhalb Citrix muss mit der gewaehlten Kombination vor Ort getestet werden.
+[Windows-Hotkey-Vorgaben](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey).
 
 Eine vorhandene TaskPlopp-Verknuepfung aktualisieren:
 
@@ -107,7 +120,7 @@ beide Ueberwachungen gleichzeitig betreiben.
 
 ### Fenster und Favoriten bedienen
 
-- **Strg+Alt+F10** oeffnet TaskPlopp. Danach waehlen **1 bis 9**, **0**, anschliessend
+- Die konfigurierte Kombination (Standard **Strg+Alt+F10**) oeffnet TaskPlopp. Danach waehlen **1 bis 9**, **0**, anschliessend
   **A bis Z** den entsprechend beschrifteten Programm-/Fensterbutton direkt aus.
   Die Zahlen funktionieren auch auf dem Ziffernblock (Num an). Fuer Buchstaben
   ist keine Umschalttaste noetig. Der Tastendruck fuehrt denselben Wechsel oder
@@ -275,6 +288,7 @@ powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPlopp.p
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudio.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudioUi.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppIdleLock.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppHotkey.ps1
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppDictation.ps1 -Engines
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppDictationUi.ps1 -Engines
 powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppApps.ps1 -StoreLaunch
@@ -316,6 +330,12 @@ Kopierwiederholung und einen weiterlaufenden UI-Heartbeat mit beiden echten Engi
 Dabei wird die Clipboard-Schreibgrenze simuliert; die persoenliche Zwischenablage
 bleibt unberuehrt. Echte Mikrofonaufnahme, Geraetewechsel, Einfuegen und Offlineprobe
 bleiben manuelle Abnahmeschritte. Vorschauen: `%TEMP%\TaskPlopp-dictation-*.png`.
+
+Der Hotkey-Test reserviert ausschliesslich freie Testkombinationen und gibt diese
+anschliessend frei. Er prueft Registrierung/Wechsel, unveraendertes Speichern,
+Belegung, Speicherfehler, Callback nach Wechsel und Konfigurationsdialog mit
+temporaerer Datei. Der Callback wird durch eine gezielte Windows-Nachricht geprueft;
+dies ersetzt keinen echten Tastendruck in Citrix. Vorschau: `%TEMP%\TaskPlopp-hotkey-config.png`.
 
 ## Symbol
 

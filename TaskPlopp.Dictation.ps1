@@ -30,7 +30,7 @@ function Update-TaskPloppDictationButton {
     $script:DictationButton.AccessibleName=$hint
     $script:ToolbarToolTip.SetToolTip($script:DictationButton,$hint)
     if(Get-Variable Tray -Scope Script -ErrorAction SilentlyContinue){
-        $script:Tray.Text=if($recording){'TaskPlopp: AUFNAHME LAEUFT'}elseif($script:DictationPhase -eq 'Transcribing'){'TaskPlopp: Transkription laeuft'}else{'TaskPlopp: Strg+Alt+F10'}
+        Update-TaskPloppTrayText
         if($recording){$script:Tray.Icon=[Drawing.SystemIcons]::Information}else{$script:Tray.Icon=$script:AppIcon}
     }
 }

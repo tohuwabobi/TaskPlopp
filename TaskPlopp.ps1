@@ -211,6 +211,7 @@ function Show-Notice([string]$Message) {
 }
 
 . (Join-Path $PSScriptRoot 'TaskPlopp.Apps.ps1')
+. (Join-Path $PSScriptRoot 'TaskPlopp.Hotkey.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Configuration.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Keyboard.ps1')
 . (Join-Path $PSScriptRoot 'TaskPlopp.Status.ps1')
@@ -249,6 +250,7 @@ try {
     $script:Main.Font = [Drawing.Font]::new('Segoe UI', 10)
     $script:Main.BackColor = [Drawing.Color]::FromArgb(245, 247, 250)
     $script:ExitRequested = $false
+    $script:HotkeysEnabled=-not $SmokeTest -and -not $ResidentTest
     $script:CurrentView = 'Tasks'
     $script:IdleState=New-TaskPloppIdleState $script:Settings.AutoLockEnabled $script:Settings.AutoLockMinutes
     $script:Main.Add_FormClosing({ param($sender, $eventArgs)
@@ -482,12 +484,11 @@ try {
         $script:Tray.Add_DoubleClick({ Show-TaskPlopp })
         $script:Tray.Visible = $true
         try {
-            $script:HotkeyListener = [TaskPloppHotkey.Listener]::new(0x4003, 0x79)
-            $script:HotkeyListener.add_Pressed({ Show-TaskPlopp })
-            $script:Tray.Text = 'TaskPlopp: Strg+Alt+F10'
+            Initialize-TaskPloppHotkey
         } catch {
             $script:Tray.Text = 'TaskPlopp: Hotkey belegt'
-            $script:Tray.ShowBalloonTip(5000, 'TaskPlopp', 'Strg+Alt+F10 ist belegt. Bitte TaskPlopp ueber dieses Symbol oeffnen.', [Windows.Forms.ToolTipIcon]::Warning)
+            $label=(Get-TaskPloppHotkeySpec $script:Settings).Label
+            $script:Tray.ShowBalloonTip(5000, 'TaskPlopp', "$label ist nicht verfuegbar. Bitte TaskPlopp ueber dieses Symbol oeffnen und die Tastenkombination in der Konfiguration aendern.", [Windows.Forms.ToolTipIcon]::Warning)
         }
     }
     $timer = New-Object Windows.Forms.Timer
@@ -542,7 +543,8 @@ try {
     Close-TaskPloppDictation
     if(Get-Variable dictationMenu -ErrorAction SilentlyContinue){$dictationMenu.Dispose()}
     if (Get-Variable idleTimer -ErrorAction SilentlyContinue) { $idleTimer.Dispose() }
-    if (Get-Variable HotkeyListener -Scope Script -ErrorAction SilentlyContinue) { $script:HotkeyListener.Dispose() }
+    $registeredHotkey=Get-Variable HotkeyListener -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    if($null -ne $registeredHotkey){$registeredHotkey.Dispose()}
     if (Get-Variable Tray -Scope Script -ErrorAction SilentlyContinue) {
         $script:Tray.Visible = $false
         $script:Tray.ContextMenuStrip.Dispose()

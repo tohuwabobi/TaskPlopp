@@ -5,6 +5,18 @@ function Get-TextProperty($Object, [string]$Name) {
 }
 
 function ConvertTo-TaskPloppSettings($Data) {
+    if($Data.PSObject.Properties.Name -notcontains 'HotkeyModifiers') {
+        $Data | Add-Member -NotePropertyName HotkeyModifiers -NotePropertyValue 3
+    }
+    if($Data.PSObject.Properties.Name -notcontains 'HotkeyKey') {
+        $Data | Add-Member -NotePropertyName HotkeyKey -NotePropertyValue 'F10'
+    }
+    if(($Data.HotkeyModifiers -isnot [int] -and $Data.HotkeyModifiers -isnot [long]) -or $Data.HotkeyModifiers -lt 1 -or $Data.HotkeyModifiers -gt 15) {
+        throw 'Tastenkombination: Mindestens Strg, Alt, Umschalt oder Win waehlen.'
+    }
+    if($Data.HotkeyKey -isnot [string] -or $Data.HotkeyKey -cnotmatch '^(?:[A-Z]|[0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$' -or $Data.HotkeyKey -eq 'F12') {
+        throw 'Tastenkombination: A-Z, 0-9 oder F1-F24 waehlen (F12 ist fuer Windows reserviert).'
+    }
     if($Data.PSObject.Properties.Name -notcontains 'DictationEngine') {
         $Data | Add-Member -NotePropertyName DictationEngine -NotePropertyValue 'Whisper'
     }
