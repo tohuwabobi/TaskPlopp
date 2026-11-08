@@ -35,6 +35,86 @@ try{
         function Get-AppWindows {param([switch]$Raw) @()}
         function Pump {for($i=0;$i-lt10;$i++){[Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 10}}
         try{
+            function Is-Topmost([IntPtr]$Handle){([TaskPloppInterop.User]::GetWindowLongPtrW($Handle,-20).ToInt64()-band8)-ne0}
+            Assert ((Is-Topmost $script:Main.Handle)-and$script:Main.TopMost) 'Initial Shown not temporarily topmost'
+            Update-TaskPloppTopmost ([IntPtr]::Zero)
+            Assert (Is-Topmost $script:Main.Handle) 'Transient zero foreground removed pin'
+            $fixturePath=Join-Path $PSScriptRoot 'fixtures\TaskPloppFocusFixture.ps1'
+            $info=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'),('-NoProfile -STA -ExecutionPolicy Bypass -File "'+$fixturePath+'" -Token "'+[IO.Path]::GetFileName($root)+'" -OwnerPid '+$PID))
+            $info.UseShellExecute=$false;$info.CreateNoWindow=$true;$info.RedirectStandardOutput=$true
+            $peer=[Diagnostics.Process]::Start($info)
+            try{
+                $line=$peer.StandardOutput.ReadLineAsync();$watch=[Diagnostics.Stopwatch]::StartNew()
+                while(-not$line.IsCompleted-and$watch.Elapsed.TotalSeconds-lt10){Pump}
+                Assert $line.IsCompleted 'External focus fixture did not start'
+                $peerHandle=[IntPtr][long]$line.Result
+                function Focus-Peer {
+                    $null=[TaskPloppInterop.User]::SetForegroundWindow($peerHandle)
+                    for($i=0;$i-lt4;$i++){Pump}
+                    Assert ([TaskPloppInterop.User]::GetForegroundWindow()-eq$peerHandle) 'Own external fixture not foreground'
+                }
+                Focus-Peer
+                Assert (-not(Is-Topmost $script:Main.Handle)-and-not$script:Main.TopMost-and$script:Main.Visible) 'External activation retains topmost or hides Main'
+                $script:Main.Activate();Pump
+                Assert (-not(Is-Topmost $script:Main.Handle)) 'Normal activation re-pins Main'
+                Show-TaskPlopp;Pump
+                Assert ((Is-Topmost $script:Main.Handle)-and$script:Main.TopMost) ('Explicit reopen does not re-pin: native='+ (Is-Topmost $script:Main.Handle)+', managed='+$script:Main.TopMost+', main='+$script:Main.Handle+', peer='+$peerHandle+', foreground='+[TaskPloppInterop.User]::GetForegroundWindow())
+                $script:Main.Hide();Pump
+                Assert (-not(Is-Topmost $script:Main.Handle)) 'Capture/Hide retains topmost'
+                $script:Main.Show();Pump
+                Assert (-not(Is-Topmost $script:Main.Handle)) 'Internal re-show pins without explicit invocation'
+                Show-TaskPlopp;Pump
+                $owned=[Windows.Forms.Form]::new();$nested=[Windows.Forms.Form]::new()
+                try{
+                    $owned.Text='Owned modal focus fixture';$entry=[Windows.Forms.TextBox]::new();$entry.Text='Preserve this input';$owned.Controls.Add($entry)
+                    $owned.Add_Shown({
+                        try{
+                            Pump
+                            Assert ((Is-Topmost $script:Main.Handle)-and(Is-Topmost $owned.Handle)) ('Owned dialog released pin: main='+ (Is-Topmost $script:Main.Handle)+', owned='+ (Is-Topmost $owned.Handle)+', foreground='+[TaskPloppInterop.User]::GetForegroundWindow()+', root='+[TaskPloppInterop.User]::GetAncestor($owned.Handle,3)+', mainH='+$script:Main.Handle)
+                            $nested.Text='Nested modal focus fixture'
+                            $nested.Add_Shown({
+                                try{
+                                    Pump
+                                    Assert ((Is-Topmost $script:Main.Handle)-and(Is-Topmost $nested.Handle)) 'Nested owned dialog released pin'
+                                    Focus-Peer
+                                    Assert (-not(Is-Topmost $script:Main.Handle)-and-not(Is-Topmost $owned.Handle)-and-not(Is-Topmost $nested.Handle)) 'Owned native topmost survives external activation'
+                                    Show-TaskPlopp;Pump
+                                    Assert ([TaskPloppInterop.User]::GetForegroundWindow()-eq$nested.Handle) ('Explicit invocation did not select nested modal dialog: foreground='+[TaskPloppInterop.User]::GetForegroundWindow())
+                                    Assert ((Is-Topmost $script:Main.Handle)-and(Is-Topmost $nested.Handle)-and$entry.Text-eq'Preserve this input') 'Reopen lost pin/input'
+                                }catch{$global:FocusFixtureFailure=$_}finally{$nested.Close()}
+                            })
+                            [void]$nested.ShowDialog($owned)
+                        }catch{$global:FocusFixtureFailure=$_}finally{$owned.Close()}
+                    })
+                    $global:FocusFixtureFailure=$null;[void]$owned.ShowDialog($script:Main)
+                    if($global:FocusFixtureFailure){throw $global:FocusFixtureFailure}
+                }finally{$nested.Dispose();$owned.Dispose()}
+                $script:Main.Hide();Pump
+                Show-TaskPlopp
+                Show-TaskPloppTransfer -OnShown {
+                    param($dialog,$args)
+                    try{
+                        Pump
+                        Assert ($script:Main.Visible-and(Is-Topmost $script:Main.Handle)-and(Is-Topmost $dialog.Handle)) 'Tray-style transfer hidden owner/pin wrong'
+                        Focus-Peer
+                        Assert (-not(Is-Topmost $script:Main.Handle)-and-not(Is-Topmost $dialog.Handle)) 'Transfer retains native pin after external switch'
+                        Show-TaskPlopp;Pump
+                        Assert ([TaskPloppInterop.User]::GetForegroundWindow()-eq$dialog.Handle) 'Transfer not reactivated by explicit invocation'
+                    }catch{$global:FocusFixtureFailure=$_}finally{$dialog.Close()}
+                }
+                if($global:FocusFixtureFailure){throw $global:FocusFixtureFailure}
+                $null=[TaskPloppInterop.User]::SetWindowPos($peerHandle,[IntPtr](-1),0,0,0,0,0x13)
+                Show-TaskPlopp;Pump
+                Assert ((Is-Topmost $script:Main.Handle)-and[TaskPloppInterop.User]::GetForegroundWindow()-eq$script:Main.Handle) 'Reopen cannot rise above own topmost peer'
+                Focus-Peer
+                Assert (-not(Is-Topmost $script:Main.Handle)) 'Topmost peer activation retains Main pin'
+                $null=[TaskPloppInterop.User]::SetWindowPos($peerHandle,[IntPtr](-2),0,0,0,0,0x13)
+                Show-TaskPlopp;Pump
+                Write-Host 'OK: Native topmost lifecycle, external process activation, zero handle, normal activation, Hide/re-show, owned/nested modal pin and input preservation.'
+            }finally{
+                if(-not$peer.HasExited){$null=$peer.CloseMainWindow();if(-not$peer.WaitForExit(1000)){$peer.Kill();$peer.WaitForExit()}}
+                $peer.Dispose()
+            }
             Pump
             Assert ((Get-TaskPloppOpenAIKeyPath)-eq$global:KeyWindowPath) 'Test must use isolated key path'
             Show-TaskPloppConfiguration -OnShown {
@@ -66,6 +146,7 @@ try{
             Pump
             $null=[TaskPloppInterop.User]::SendMessageW($sender.Handle,0x112,[IntPtr]0xF020,[IntPtr]::Zero);Pump
             Assert ($sender.Visible-and$sender.ShowInTaskbar-and$sender.WindowState-eq'Minimized'-and[TaskPloppInterop.User]::IsIconic($sender.Handle)) 'Minimize removes taskbar window'
+            Assert (-not(Is-Topmost $sender.Handle)) 'Native topmost remains after minimize'
             $sender.Close();Pump
             Assert (-not$sender.IsDisposed-and-not$sender.Visible) 'X while minimized must hide resident GUI'
             Show-TaskPlopp;Pump

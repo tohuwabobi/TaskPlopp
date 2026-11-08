@@ -134,7 +134,7 @@ try {
     $script:Main.Size = [Drawing.Size]::new([Math]::Min(760, $workArea.Width - 80), [Math]::Min(1200, $workArea.Height - 80))
     $script:Main.MinimumSize = [Drawing.Size]::new(460, 350)
     $script:Main.StartPosition = 'CenterScreen'
-    $script:Main.TopMost = $true
+    $script:Main.TopMost = $false
     $script:Main.Font = [Drawing.Font]::new('Segoe UI', 15)
     $script:Main.BackColor = [Drawing.Color]::FromArgb(245, 247, 250)
     $script:ExitRequested = $false
@@ -157,12 +157,33 @@ try {
         $script:Main.WindowState=[Windows.Forms.FormWindowState]::Minimized
     }
 
+    function Update-TaskPloppTopmost([IntPtr]$Foreground=([TaskPloppInterop.User]::GetForegroundWindow())) {
+        if(-not$script:Main.TopMost){return}
+        if(-not$script:Main.Visible-or$script:Main.WindowState-eq'Minimized'){$script:Main.TopMost=$false;return}
+        if($Foreground-eq[IntPtr]::Zero){return}
+        $window=$Foreground;$seen=@{}
+        while($window-ne[IntPtr]::Zero-and-not$seen.ContainsKey($window)){
+            if($window-eq$script:Main.Handle){return}
+            $seen[$window]=$true
+            $window=[TaskPloppInterop.User]::GetWindow($window,4) # GW_OWNER
+        }
+        $script:Main.TopMost=$false
+    }
+
     function Show-TaskPlopp {
         if($script:LayoutCapturing){return}
-        $transfer=Get-Variable TransferDialog -Scope Script -ValueOnly -ErrorAction SilentlyContinue
-        if($transfer -and -not $transfer.IsDisposed){$transfer.Activate();return}
         $script:Main.Show()
-        Raise-TaskPloppWindow $script:Main.Handle
+        if($script:Main.WindowState-eq'Minimized'){$script:Main.WindowState='Normal'}
+        $target=$script:Main.Handle;$seen=@{}
+        while(-not$seen.ContainsKey($target)){
+            $seen[$target]=$true
+            $popup=[TaskPloppInterop.User]::GetWindow($target,6) # GW_ENABLEDPOPUP
+            if($popup-eq$target-or$popup-eq[IntPtr]::Zero-or-not[TaskPloppInterop.User]::IsWindowVisible($popup)){break}
+            $target=$popup
+        }
+        $script:Main.TopMost=$true
+        Raise-TaskPloppWindow $target
+        if($target-ne$script:Main.Handle){return}
         Show-TaskPloppView 'Tasks'
         Show-TaskPloppDictationStatus
     }
@@ -191,7 +212,8 @@ try {
     $script:ToolbarIconFont=[Drawing.Font]::new('Segoe MDL2 Assets',14)
     $script:MessageBar = New-TaskPloppMessageBar
     $script:MessageBar.Name='Messages'; $script:MessageBar.Dock='Fill'; $script:MessageBar.Margin=[Windows.Forms.Padding]::new(10,3,10,3)
-    $script:Main.Add_VisibleChanged({ Set-TaskPloppStatusHostVisible $script:Main.Visible })
+    $script:Main.Add_VisibleChanged({ Set-TaskPloppStatusHostVisible $script:Main.Visible;Update-TaskPloppTopmost })
+    $script:Main.Add_Resize({if($script:Main.WindowState-eq'Minimized'){$script:Main.TopMost=$false}})
     $top.Controls.Add($toolbar,0,0); $top.Controls.Add($script:MessageBar,0,1)
     $script:ListPanel = New-Object Windows.Forms.FlowLayoutPanel
     $script:ListPanel.Name='TaskContent'
@@ -347,7 +369,7 @@ try {
     $script:ConfigurationButton.Name='ConfigurationButton'
     $transferMenu=[Windows.Forms.ContextMenuStrip]::new()
     $transferItem=$transferMenu.Items.Add('Konfiguration sichern/uebertragen')
-    $transferItem.Add_Click({Show-TaskPloppTransfer})
+    $transferItem.Add_Click({Show-TaskPlopp;Show-TaskPloppTransfer})
     $script:ConfigurationButton.ContextMenuStrip=$transferMenu
     $null = Add-ToolbarButton 'Citrix' {
         $citrix = @(Get-AppWindows -Raw | Where-Object { $_.ProcessName -in $script:CitrixProcesses })
@@ -435,7 +457,7 @@ try {
         $openItem = $menu.Items.Add('TaskPlopp oeffnen')
         $openItem.Add_Click({ Show-TaskPlopp })
         $transferTrayItem=$menu.Items.Add('Konfiguration sichern/uebertragen')
-        $transferTrayItem.Add_Click({Show-TaskPloppTransfer})
+        $transferTrayItem.Add_Click({Show-TaskPlopp;Show-TaskPloppTransfer})
         $exitItem = $menu.Items.Add('TaskPlopp beenden')
         $exitItem.Add_Click({ $script:ExitRequested = $true; $script:Main.Close() })
         $script:Tray.ContextMenuStrip = $menu
@@ -452,11 +474,12 @@ try {
     $timer = New-Object Windows.Forms.Timer
     $timer.Interval = 150
     $timer.Add_Tick({
+        Update-TaskPloppTopmost
         if ($script:WakeEvent.WaitOne(0)) {
             Show-TaskPlopp
         }
     })
-    $script:Main.Add_Shown({ Raise-TaskPloppWindow $script:Main.Handle })
+    $script:Main.Add_Shown({ $script:Main.TopMost=$true;Raise-TaskPloppWindow $script:Main.Handle })
     if($OnShown) { $script:Main.Add_Shown($OnShown) }
     Update-WindowList
     Update-TaskPloppContentLayout

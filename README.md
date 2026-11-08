@@ -568,3 +568,15 @@ entfallen. Sondertasten duerfen alleine stehen; Buchstaben/F-Tasten brauchen Zus
 Die bisherige Belegung bleibt erhalten, bis du selbst etwas aenderst. Falls Logitech
 die Sondertaste anders belegt, diese Belegung dort pruefen. Echten Tastendruck auch
 im Citrix-Vollbild testen; erfolgreiche Windows-Registrierung allein belegt das nicht.
+
+## Vorne beim Aufruf, danach normales Fenster
+
+Beim Start und beim expliziten Oeffnen per Hotkey oder Tray kommt TaskPlopp nach vorne,
+auch ueber andere Vordergrundfenster. Sobald eine andere Anwendung aktiv wird, gibt
+es das zeitweilige **Immer im Vordergrund** im vorhandenen 150-ms-Prueftakt frei.
+TaskPlopp bleibt dabei geoeffnet und laesst sich normal ueberdecken. Ein erneuter
+Hotkey-Aufruf holt es wieder nach vorne. Eigene Konfigurations- und Unterdialoge
+zaehlen weiterhin zu TaskPlopp; ein Wiederaufruf aktiviert den bereits offenen Dialog.
+Minimieren/Leertaste behalten den Taskleisteneintrag, X blendet in den Infobereich aus.
+Kein neuer Schalter und keine automatische Citrix-Erkennung. Windows kann Aktivierung
+beschraenken; den Aufruf und Wechsel im echten Citrix-Vollbild vor Ort pruefen.
