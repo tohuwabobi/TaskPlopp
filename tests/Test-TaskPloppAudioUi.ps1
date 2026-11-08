@@ -8,7 +8,9 @@ function Save-Preview($Form,[string]$Name) {
     finally { $bitmap.Dispose() }
 }
 $global:TaskPloppUiFailure=$null
-& (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -SmokeTest -OnShown {
+$testConfig=Join-Path $env:TEMP ('TaskPlopp-audio-ui-'+[guid]::NewGuid().ToString('N')+'.json')
+[IO.File]::WriteAllText($testConfig,'{"ShowOpenWindows":false,"AutoLockEnabled":false,"Programs":[{"Name":"Fixture","ProcessName":"taskplopp-audio-fixture","TitleContains":""}]}',[Text.UTF8Encoding]::new($true))
+& (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $testConfig -OnShown {
     param($sender,$eventArgs)
     $smokeTimer.Stop()
     try {
@@ -59,7 +61,8 @@ $global:TaskPloppUiFailure=$null
         Assert (-not $sender.AudioView) 'Escape kehrt nicht zu Tasks zurueck.'
         Assert (@($content.Controls | Where-Object {$_ -is [Windows.Forms.Button]})[0].Text -eq $firstTask) 'Favoritenreihenfolge/Taste veraendert.'
         $toggle.PerformClick()
-        Show-TaskPloppConfiguration -OnShown { param($dialog,$args) $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick() }
+        function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
+            Show-TaskPloppConfiguration -OnShown { param($dialog,$args) $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick() }
         Assert $sender.AudioView 'Konfigurationsrueckkehr hat Audio verlassen.'
         Show-TaskPlopp
         [Windows.Forms.Application]::DoEvents() # Finish the asynchronous restore before testing Hide.
@@ -74,4 +77,5 @@ $global:TaskPloppUiFailure=$null
     } catch { $global:TaskPloppUiFailure=$_; [Console]::WriteLine($_.ToString()) }
     finally { $sender.Close() }
 }
+[IO.File]::Delete($testConfig)
 if($global:TaskPloppUiFailure) { throw $global:TaskPloppUiFailure }

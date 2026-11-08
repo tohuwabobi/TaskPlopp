@@ -1,5 +1,6 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
+function Complete-TextEdit($Control){[Windows.Forms.Control].GetMethod('OnLeave',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($Control,[object[]]@([EventArgs]::Empty))|Out-Null}
 function Assert([bool]$Value,[string]$Message){if(-not$Value){throw $Message}}
 function Client-Bounds($Control,$Form){$point=$Form.PointToClient($Control.PointToScreen([Drawing.Point]::Empty));[Drawing.Rectangle]::new($point,$Control.Size)}
 $root=Join-Path $env:TEMP ('TaskPlopp-layout-'+[guid]::NewGuid().ToString('N'))
@@ -9,7 +10,7 @@ $data=[pscustomobject]@{ShowOpenWindows=$true;AutoLockEnabled=$false;Programs=$g
 [IO.File]::WriteAllText($config,($data|ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($true))
 $global:LayoutFailure=$null
 try{
-    . (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -SmokeTest -ConfigFile $config -OnShown {
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $config -OnShown {
         param($sender,$args)
         $smokeTimer.Stop()
         try{
@@ -52,17 +53,18 @@ try{
             Assert ($bar.Tag.Lines[0]-like'*nicht aktiviert*'-and$bar.BackColor.ToArgb()-eq[Drawing.Color]::FromArgb(255,198,198).ToArgb()) 'Fokusfehler nicht rot'
             Open-Favorite $script:Settings.Programs[0]
             Assert ($bar.Tag.Lines[0]-like'*Startziel fehlt*'-and(Get-Variable ConfigurationOpen -Scope Script -ValueOnly -ErrorAction SilentlyContinue)-ne$true) 'Fehlendes Startziel oeffnet automatisch Konfiguration'
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $local=$dialog.Controls.Find('ConfigurationMessages',$true)[0]
                 $timer=$local.Tag.Timer
                 $dialog.Controls.Find('FavoriteName',$true)[0].Text=''
-                $dialog.Controls.Find('SaveSettings',$true)[0].PerformClick()
+                Complete-TextEdit $dialog.Controls.Find('FavoriteName',$true)[0]
                 Assert ($dialog.Visible-and$local.Tag.Lines[0]-like'*nicht uebernommen*') 'Validierungsfehler im Dialog unsichtbar'
                 Set-TaskPloppMessage Error ('Langer Fehler '*30) ('Langes Detail '*30)
                 Assert $local.IsScrolling 'Lokale Status-Laufschrift fehlt'
                 $script:LayoutConfigTimer=$timer
-                $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             Assert (-not$script:LayoutConfigTimer.Enabled) 'Dialogstatus-Timer laeuft nach Schliessen weiter'
             $sender.Hide();Set-TaskPloppMessage Error 'Unsichtbarer Testhinweis' 'Nicht hervorholen.'
@@ -82,7 +84,7 @@ try{
     $context=$contextType.GetMethod('FromCurrent',[Reflection.BindingFlags]'Static,Public,NonPublic').Invoke($null,@())
     Assert ($null-eq$contextType.GetField('threadExceptionHandler',[Reflection.BindingFlags]'Instance,NonPublic').GetValue($context)) 'GUI-Exceptionhandler nach Ende noch registriert'
     $badConfig=Join-Path $root 'broken.json';[IO.File]::WriteAllText($badConfig,'{kaputt')
-    . (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -SmokeTest -ConfigFile $badConfig -OnShown {
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $badConfig -OnShown {
         param($sender,$args)
         try{Assert ($script:MessageBar.Tag.Lines[0]-like'*Start nicht vollstaendig*'-and$script:MessageBar.Tag.Lines[1]-like'*Konfiguration*') 'Startfehler nicht in Statusleiste'}
         catch{$global:LayoutFailure=$_}
@@ -90,7 +92,7 @@ try{
     }
     if($global:LayoutFailure){throw $global:LayoutFailure}
     Assert ([IO.File]::ReadAllText($badConfig)-eq'{kaputt') 'Defekte Config ueberschrieben'
-    foreach($file in @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter 'TaskPlopp*.ps1')+@(Get-Item (Join-Path $PSScriptRoot 'Start-TaskPlopp.ps1'))){Assert (-not([IO.File]::ReadAllText($file.FullName)-match'MessageBox|ShowBalloonTip|Show-Notice')) ('Popupquelle uebrig: '+$file.Name)}
+    foreach($file in @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..\src') -Filter 'TaskPlopp*.ps1')+@(Get-Item (Join-Path $PSScriptRoot '..\Start-TaskPlopp.ps1'))){Assert (-not([IO.File]::ReadAllText($file.FullName)-match'MessageBox|ShowBalloonTip|Show-Notice')) ('Popupquelle uebrig: '+$file.Name)}
     Write-Host 'OK: Startupfehler ohne Dialog, Config unveraendert, keine Popupquellen, GUI-Exceptionhandler abgemeldet.'
 }finally{
     $resolved=[IO.Path]::GetFullPath($root)

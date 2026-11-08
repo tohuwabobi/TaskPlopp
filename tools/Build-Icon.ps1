@@ -32,12 +32,12 @@ foreach ($size in $sizes) {
         $graphics.FillPolygon($gold,$points)
         $bitmap.Save($stream,[Drawing.Imaging.ImageFormat]::Png)
         $frames += ,$stream.ToArray()
-        if ($size -eq 256) { $bitmap.Save((Join-Path $PSScriptRoot 'assets\TaskPlopp.png'),[Drawing.Imaging.ImageFormat]::Png) }
+        if ($size -eq 256) { $bitmap.Save((Join-Path $PSScriptRoot '..\assets\TaskPlopp.png'),[Drawing.Imaging.ImageFormat]::Png) }
     } finally {
         foreach ($item in @($graphics,$bitmap,$purple,$cyan,$gold,$handle,$ring,$shine,$path,$stream)) { $item.Dispose() }
     }
 }
-$output = [IO.File]::Create((Join-Path $PSScriptRoot 'assets\TaskPlopp.ico'))
+$output = [IO.File]::Create((Join-Path $PSScriptRoot '..\assets\TaskPlopp.ico'))
 $writer = [IO.BinaryWriter]::new($output)
 try {
     $writer.Write([uint16]0); $writer.Write([uint16]1); $writer.Write([uint16]$sizes.Count)

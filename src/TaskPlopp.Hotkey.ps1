@@ -1,4 +1,5 @@
-﻿# Register a replacement before saving/releasing the old hotkey.
+﻿$script:HotkeyCleanupWarning=''
+# Register a replacement before saving/releasing the old hotkey.
 function Get-TaskPloppHotkeySpec($Settings) {
     $keyName=if($Settings.HotkeyKey -match '^\d$'){'D'+$Settings.HotkeyKey}else{$Settings.HotkeyKey}
     $names=@()
@@ -50,6 +51,7 @@ function Initialize-TaskPloppHotkey {
     Update-TaskPloppTrayText
 }
 function Save-TaskPloppSettingsWithHotkey($Settings) {
+    $script:HotkeyCleanupWarning=''
     $Settings=ConvertTo-TaskPloppSettings $Settings
     $candidate=$null
     $enabled=(Get-Variable HotkeysEnabled -Scope Script -ValueOnly -ErrorAction SilentlyContinue) -eq $true
@@ -64,7 +66,7 @@ function Save-TaskPloppSettingsWithHotkey($Settings) {
     if($null -ne $candidate){
         $old=Get-Variable HotkeyListener -Scope Script -ValueOnly -ErrorAction SilentlyContinue
         $script:HotkeyListener=$candidate;$script:ActiveHotkey=$spec
-        if($null -ne $old){$old.Dispose()}
+        if($null -ne $old){try{$old.Dispose()}catch{$script:HotkeyCleanupWarning='Datei und neuer Hotkey gespeichert; der bisherige Hotkey-Thread ist noch nicht vollstaendig aufgeraeumt.'}}
     }
 }
 function Update-TaskPloppTrayText {

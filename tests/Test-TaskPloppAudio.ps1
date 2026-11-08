@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([switch]$Hardware)
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Condition,[string]$Message) { if(-not $Condition) { throw $Message } }
 Initialize-TaskPloppAudio
 foreach($type in @([TaskPloppInterop.AudioEnumerator],[TaskPloppInterop.AudioEndpoint],[TaskPloppInterop.AudioProperties],[TaskPloppInterop.AudioPolicy])) {

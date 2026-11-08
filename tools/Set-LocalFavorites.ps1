@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([switch]$DownloadsFirst)
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 $settings = Get-Settings
 $statePath = Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\Local State'
 $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -17,7 +17,7 @@ foreach ($definition in $profileDefinitions) {
         throw "Chrome-Profil fehlt: $($definition.Directory)"
     }
 }
-$shortcutDir = Join-Path $PSScriptRoot 'shortcuts'
+$shortcutDir = Join-Path $script:ProjectRoot 'shortcuts'
 [void][IO.Directory]::CreateDirectory($shortcutDir)
 $wscript = New-Object -ComObject WScript.Shell
 $shell = New-Object -ComObject Shell.Application
@@ -64,7 +64,8 @@ try {
     })
     if ($DownloadsFirst) { $settings.Programs = $folderFavorites + $chromeFavorites + $others }
     else { $settings.Programs = $chromeFavorites + $folderFavorites + $others }
-    $backup = Join-Path $PSScriptRoot ('config.before-local-favorites-' + [DateTime]::Now.ToString('yyyyMMdd-HHmmss') + '.json')
+    $null=[IO.Directory]::CreateDirectory((Join-Path $script:DataRoot 'backups'))
+    $backup = Join-Path (Join-Path $script:DataRoot 'backups') ('config.before-local-favorites-' + [DateTime]::Now.ToString('yyyyMMdd-HHmmss') + '.json')
     Copy-Item -LiteralPath $script:ConfigPath -Destination $backup -ErrorAction Stop
     Save-Settings $settings
     Write-Output "Konfiguration gesichert: $backup"

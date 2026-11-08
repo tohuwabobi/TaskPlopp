@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 $path = Join-Path $env:TEMP ('TaskPlopp-test-' + [guid]::NewGuid().ToString('N') + '.json')
 try {
     $settings = [pscustomobject]@{

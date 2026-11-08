@@ -21,7 +21,7 @@ if($Engines){
     } finally {$s.Dispose();$memory.Dispose()}
 }
 try {
-    . (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -SmokeTest -ConfigFile $testConfig -OnShown {
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $testConfig -OnShown {
         param($sender,$args)
         try {
             $smokeTimer.Stop()
@@ -31,20 +31,22 @@ try {
             [Windows.Forms.Application]::DoEvents()
             $toolbar=$sender.Controls.Find('Toolbar',$true)[0]
             Assert (@($toolbar.Controls | ForEach-Object Top | Select-Object -Unique).Count -eq 1) 'Mikrofon erzeugt Umbruch'
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $tab=$dialog.Controls.Find('DictationTab',$true)[0];$tab.Parent.SelectedTab=$tab
                 $dialog.Controls.Find('DictationEngine',$true)[0].SelectedIndex=1
                 Preview $dialog 'TaskPlopp-dictation-config.png'
-                $dialog.Controls.Find('SaveSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             Assert ((Get-Settings -Path $testConfig).DictationEngine -eq 'Vosk') 'Engine nicht gespeichert'
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $dialog.Controls.Find('DictationEngine',$true)[0].SelectedIndex=0
-                $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
-            Assert ($script:Settings.DictationEngine -eq 'Vosk') 'Abbrechen hat Engine geaendert'
+            Assert ($script:Settings.DictationEngine -eq 'Whisper') 'Engine nicht sofort uebernommen'
             $script:DictationPhase='Transcribing';Update-TaskPloppDictationButton
             Assert (-not $mic.Enabled) 'Parallelaufnahme moeglich'
             $script:DictationPhase='Ready';$script:DictationInstaller=[pscustomobject]@{Done=$false;LastLine='Test'}
@@ -118,7 +120,7 @@ try {
                     Write-Host 'OK: Beide echten Engines durch GUI-Ablauf, zweiter Satz erhalten, UI-Heartbeat laeuft weiter. Clipboard-Schreibgrenze simuliert.'
                 } finally {$heartbeat.Dispose();$global:DictationFixturePcm=$null}
             }
-            'OK: Engine speichern/abbrechen, kompakte GUI, Pegel, Sperre paralleler Aktionen, Clipboardfehler, leeres/fehlerhaftes Ergebnis, Verwerfen, fehlende Einrichtung.' | Write-Host
+            'OK: Engine sofort speichern, kompakte GUI, Pegel, Sperre paralleler Aktionen, Clipboardfehler, leeres/fehlerhaftes Ergebnis, Verwerfen, fehlende Einrichtung.' | Write-Host
         } catch {$global:DictationUiFailure=$_;Write-Host $_.ToString()}
         finally {$sender.Close()}
     }

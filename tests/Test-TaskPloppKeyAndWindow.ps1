@@ -1,6 +1,7 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+function Complete-TextEdit($Control){[Windows.Forms.Control].GetMethod('OnLeave',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($Control,[object[]]@([EventArgs]::Empty))|Out-Null}
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Value,[string]$Message){if(-not$Value){throw $Message}}
 function Reject($Action,[string]$Expected){try{&$Action;throw 'NOT_REJECTED'}catch{Assert ($_.Exception.Message-eq$Expected) ('Expected '+$Expected+', got '+$_.Exception.Message)}}
 $root=Join-Path $env:TEMP ('TaskPlopp-key-window-'+[guid]::NewGuid().ToString('N'))
@@ -27,7 +28,7 @@ try{
     [IO.File]::WriteAllBytes($global:KeyWindowPath,[byte[]]@(1,2,3))
     Assert (-not(Test-TaskPloppOpenAIKey $global:KeyWindowPath)) 'Corrupt file accepted'
     Write-Host 'OK: Isolated DPAPI first save, atomic replacement, invalid/empty input, locked destination preserves old bytes, corrupt file, encrypted temp cleanup.'
-    . (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -ResidentTest -ConfigFile $config -OnShown {
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -ResidentTest -ConfigFile $config -OnShown {
         param($sender,$args)
         $smokeTimer.Stop()
         function Get-TaskPloppOpenAIKeyPath {$global:KeyWindowPath}
@@ -39,18 +40,18 @@ try{
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $tab=$dialog.Controls.Find('WindowLayoutTab',$true)[0];$tab.Parent.SelectedTab=$tab
-                $input=$dialog.Controls.Find('OpenAIKey',$true)[0];$save=$dialog.Controls.Find('SaveOpenAIKey',$true)[0];$state=$dialog.Controls.Find('OpenAIKeyState',$true)[0]
+                $input=$dialog.Controls.Find('OpenAIKey',$true)[0];$state=$dialog.Controls.Find('OpenAIKeyState',$true)[0]
                 Assert ($input.UseSystemPasswordChar-and$input.Text-eq'') 'Key is visible or prefilled'
                 Assert ($state.Text-like'*nicht verwendbar*') 'Corrupt file status missing'
-                $input.Text='invalid';$save.PerformClick()
+                $input.Text='invalid';Complete-TextEdit $input
                 $bar=$dialog.Controls.Find('ConfigurationMessages',$true)[0]
                 Assert ($dialog.Visible-and$bar.Tag.Lines[0]-like'*nicht gespeichert*'-and$bar.BackColor.ToArgb()-eq[Drawing.Color]::FromArgb(255,198,198).ToArgb()) 'Key failure not in local red status'
-                $input.Text='sk-taskplopp-FAKE-gui';$save.PerformClick()
+                $input.Text='sk-taskplopp-FAKE-gui';Complete-TextEdit $input
                 Assert ($input.Text-eq''-and$state.Text-like'*nicht online geprueft*'-and$bar.Tag.Lines[0]-like'*lokal gespeichert*'-and$bar.BackColor.ToArgb()-eq[Drawing.Color]::FromArgb(205,239,211).ToArgb()) 'Local save success not clear'
                 $dialog.Controls.Find('WindowLayoutModel',$true)[0].Text='unsaved-model'
-                $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
-            Assert ((Test-TaskPloppOpenAIKey $global:KeyWindowPath)-and$script:Settings.WindowLayoutModel-eq'gpt-4.1-mini') 'Cancel lost separate key save or saved model draft'
+            Assert ((Test-TaskPloppOpenAIKey $global:KeyWindowPath)-and$script:Settings.WindowLayoutModel-eq'unsaved-model') 'Closing lost key/model autosave'
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $tab=$dialog.Controls.Find('WindowLayoutTab',$true)[0];$tab.Parent.SelectedTab=$tab
@@ -58,9 +59,9 @@ try{
                 Assert ($dialog.Controls.Find('OpenAIKeyState',$true)[0].Text-like'Lokal eingerichtet*') 'Existing usable key status missing'
                 $input=$dialog.Controls.Find('OpenAIKey',$true)[0];$input.Text='sk-taskplopp-FAKE-locked-gui'
                 $lock=[IO.File]::Open($global:KeyWindowPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
-                try{$dialog.Controls.Find('SaveOpenAIKey',$true)[0].PerformClick()}finally{$lock.Dispose()}
-                Assert ($input.Text-eq'sk-taskplopp-FAKE-locked-gui'-and$dialog.Controls.Find('ConfigurationMessages',$true)[0].Tag.Lines[0]-like'*nicht gespeichert*') 'Failed UI save lost input or did not report failure'
-                $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick()
+                try{Complete-TextEdit $input}finally{$lock.Dispose()}
+                Assert ($input.Text-eq''-and$dialog.Controls.Find('ConfigurationMessages',$true)[0].Tag.Lines[0]-like'*nicht gespeichert*') 'Failed UI save lost input or did not report failure'
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             Pump
             $null=[TaskPloppInterop.User]::SendMessageW($sender.Handle,0x112,[IntPtr]0xF020,[IntPtr]::Zero);Pump
@@ -99,7 +100,7 @@ try{
             Show-TaskPlopp;Pump
             Assert ($sender.Visible-and-not$sender.IsDisposed) 'Resident GUI did not reopen'
             Assert (-not([IO.File]::ReadAllText($config)-match'sk-taskplopp')) 'Config contains fake key'
-            Write-Host 'OK: Masked local key UI, status colors, separate save/cancel, empty reopen, minimize -> X -> wake, favorites/AI minimize, resident exit.'
+            Write-Host 'OK: Masked local key UI, status colors, autosave/close, empty reopen, minimize -> X -> wake, favorites/AI minimize, resident exit.'
         }catch{$global:KeyWindowFailure=$_}
         finally{$script:ExitRequested=$true;$script:LayoutJob=$null;$sender.Close()}
     }

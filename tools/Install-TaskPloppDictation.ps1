@@ -36,8 +36,8 @@ try {
     Expand-Archive -LiteralPath $vosk -DestinationPath (Join-Path $Root 'vosk-0.3.45') -Force
     Expand-Archive -LiteralPath $model -DestinationPath $Root -Force
     Progress-Line 'Pruefung: beide Engines und Modelle (nur synthetische Stille)'
-    . (Join-Path $PSScriptRoot 'TaskPlopp.Native.ps1')
-    . (Join-Path $PSScriptRoot 'TaskPlopp.Dictation.ps1')
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.Native.ps1')
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.Dictation.ps1')
     foreach($engine in 'Whisper','Vosk') {
         $exe=if($engine -eq 'Whisper'){Join-Path $Root 'whisper-b5454\Release\whisper-cli.exe'}else{Join-Path $Root 'vosk-0.3.45\vosk-win64-0.3.45\libvosk.dll'}
         $target=if($engine -eq 'Whisper'){$base}else{Join-Path $Root 'vosk-model-small-de-0.15'}

@@ -63,7 +63,7 @@ function Get-ShortcutProcessName([string]$Path) {
 function Show-TaskPloppConfiguration {
     param([scriptblock]$OnShown)
     if($null-ne$script:LayoutJob){Set-TaskPloppMessage Notice 'Fensterordner arbeitet' 'Konfiguration bitte nach Abschluss oder Abbruch oeffnen.';return}
-    # Edit a copy; cancellation never changes the live configuration.
+    # Controls edit candidates; completed changes are saved immediately.
     $working = ConvertTo-TaskPloppSettings ($script:Settings | ConvertTo-Json -Depth 8 | ConvertFrom-Json)
     $dialog = New-Object Windows.Forms.Form
     $dialog.Icon = $script:Main.Icon
@@ -116,7 +116,7 @@ function Show-TaskPloppConfiguration {
     $dictationInstallStatus.MaximumSize=[Drawing.Size]::new(700,0)
     $dictationHelp=New-Object Windows.Forms.Label
     $dictationHelp.AutoSize=$true
-    $dictationHelp.Text="Beide Engines und deutsche Modelle werden benutzerlokal eingerichtet.`r`nDownload etwa 220 MB; normalerweise keine Adminrechte erforderlich.`r`nEinrichtung gilt sofort, unabhaengig von Speichern/Abbrechen.`r`nEngine-Auswahl gilt nach Speichern fuer das naechste Diktat.`r`nMikrofon wird ueber Audio gewaehlt. Keine Cloud, kein Audioarchiv.`r`nErster Mikrofonklick: Aufnahme. Zweiter Klick: Transkription.`r`nRechtsklick auf Mikrofon: Verwerfen oder erneut kopieren."
+    $dictationHelp.Text="Beide Engines und deutsche Modelle werden benutzerlokal eingerichtet.`r`nDownload etwa 220 MB; normalerweise keine Adminrechte erforderlich.`r`nEinrichtung gilt sofort.`r`nEngine-Auswahl wird sofort fuer das naechste Diktat gespeichert.`r`nMikrofon wird ueber Audio gewaehlt. Keine Cloud, kein Audioarchiv.`r`nErster Mikrofonklick: Aufnahme. Zweiter Klick: Transkription.`r`nRechtsklick auf Mikrofon: Verwerfen oder erneut kopieren."
     $dictationLayout.Controls.AddRange(@($dictationLabel,$dictationChoice,$dictationReady,$dictationInstall,$dictationInstallStatus,$dictationHelp))
     $dictationTab.Controls.Add($dictationLayout);[void]$tabs.TabPages.Add($dictationTab)
     $dictationStatusTimer=New-Object Windows.Forms.Timer
@@ -153,21 +153,9 @@ function Show-TaskPloppConfiguration {
         $keyState.Text=if(Test-TaskPloppOpenAIKey){'Lokal eingerichtet (nicht online geprueft).'}elseif([IO.File]::Exists((Get-TaskPloppOpenAIKeyPath))){'Vorhandene Schluesseldatei ist nicht verwendbar. Bitte Key neu speichern.'}else{'Noch kein API-Key eingerichtet.'}
     }
     & $updateKeyState
-    $keySave=[Windows.Forms.Button]::new();$keySave.Name='SaveOpenAIKey';$keySave.Text='API-Key speichern';$keySave.AutoSize=$true
-    $keySave.Add_Click({
-        try{Save-TaskPloppOpenAIKey $keyInput.Text}
-        catch{
-            $detail=if($_.Exception.Message-eq'KEY_FORMAT'){'Bitte einen OpenAI-Key beginnend mit sk- ohne Leerzeichen eingeben. Ein vorhandener Key bleibt erhalten.'}else{'Lokales Speichern fehlgeschlagen. Ein vorhandener Key bleibt erhalten. Bitte Schreibrechte pruefen.'}
-            Set-TaskPloppMessage Error 'API-Key nicht gespeichert' $detail
-            return
-        }
-        # The file has been published. A later UI failure must not report a failed save.
-        $keyInput.Clear();$keyState.Text='Lokal eingerichtet (nicht online geprueft).'
-        Set-TaskPloppMessage Success 'API-Key lokal gespeichert' 'Gilt sofort auf diesem PC. Keine Online-Pruefung durchgefuehrt.'
-    })
     $keyHelp=[Windows.Forms.Label]::new();$keyHelp.AutoSize=$true;$keyHelp.MaximumSize=[Drawing.Size]::new(700,0)
-    $keyHelp.Text="API-Key speichern gilt sofort und getrennt von den anderen Einstellungen.`r`nAbbrechen unten nimmt einen bereits gespeicherten Key nicht zurueck.`r`nEin vorhandener Key wird nie angezeigt. Neue Eingabe ersetzt ihn lokal."
-    $layoutSettings.Controls.AddRange(@($layoutLabel,$layoutModel,$keyLabel,$keyInput,$keyState,$keySave,$keyHelp,$layoutHelp));$layoutTab.Controls.Add($layoutSettings);[void]$tabs.TabPages.Add($layoutTab)
+    $keyHelp.Text="Neue Eingabe wird beim Verlassen des Feldes automatisch gespeichert.`r`nEin leeres Feld behaelt den vorhandenen Key; er wird nie angezeigt."
+    $layoutSettings.Controls.AddRange(@($layoutLabel,$layoutModel,$keyLabel,$keyInput,$keyState,$keyHelp,$layoutHelp));$layoutTab.Controls.Add($layoutSettings);[void]$tabs.TabPages.Add($layoutTab)
     $hotkeyTab=New-Object Windows.Forms.TabPage
     $hotkeyTab.Name='HotkeyTab';$hotkeyTab.Text='Tastenkombination'
     $hotkeyLayout=New-Object Windows.Forms.FlowLayoutPanel
@@ -199,7 +187,7 @@ function Show-TaskPloppConfiguration {
     & $updateHotkeyPreview
     $hotkeyHelp=New-Object Windows.Forms.Label
     $hotkeyHelp.AutoSize=$true;$hotkeyHelp.MaximumSize=[Drawing.Size]::new(700,0)
-    $hotkeyHelp.Text="Speichern prueft und aktiviert die Kombination sofort.`r`nIst sie belegt, bleiben bisherige Kombination und Einstellungen erhalten.`r`nStandard: Strg+Alt+F10. F12 ist fuer Windows reserviert.`r`nCitrix kann Tastenkombinationen an die entfernte Sitzung weiterreichen.`r`nBitte die gewaehlte Kombination auch im Citrix-Vollbild testen."
+    $hotkeyHelp.Text="Jede Auswahl prueft und aktiviert die Kombination sofort.`r`nIst sie belegt, bleiben bisherige Kombination und Einstellungen erhalten.`r`nStandard: Strg+Alt+F10. F12 ist fuer Windows reserviert.`r`nCitrix kann Tastenkombinationen an die entfernte Sitzung weiterreichen.`r`nBitte die gewaehlte Kombination auch im Citrix-Vollbild testen."
     $hotkeyLayout.Controls.AddRange(@($hotkeyLabel,$hotkeyModifiers,$hotkeyKey,$hotkeyPreview,$hotkeyHelp))
     $hotkeyTab.Controls.Add($hotkeyLayout);[void]$tabs.TabPages.Add($hotkeyTab)
 
@@ -262,157 +250,20 @@ function Show-TaskPloppConfiguration {
     $addApp.Text = 'Installierte App hinzufuegen...'; $addApp.AutoSize = $true
     $favoriteActions.Controls.AddRange(@($addWindow,$addFile,$addApp,$remove))
     $favoritesTab.Controls.Add($editor); $favoritesTab.Controls.Add($favoriteColumn); $favoritesTab.Controls.Add($favoriteActions)
-    $favoriteList.Add_SelectedIndexChanged({
-        $entry = $favoriteList.SelectedItem
-        $editor.Enabled = ($null -ne $entry)
-        $up.Enabled = ($favoriteList.SelectedIndex -gt 0)
-        $down.Enabled = ($favoriteList.SelectedIndex -ge 0 -and $favoriteList.SelectedIndex -lt $favoriteList.Items.Count - 1)
-        if ($null -ne $entry) {
-            $nameBox.Text = $entry.Name; $processBox.Text = $entry.ProcessName
-            $titleBox.Text = $entry.TitleContains
-            $always.Checked = [bool]$entry.LaunchAlways
-            $targetBox.Text = if ($entry.StartTarget) { $entry.StartTarget } else { 'Noch kein Startziel bekannt - bitte auswaehlen.' }
-        }
-    })
-    $up.Add_Click({
-        $index = $favoriteList.SelectedIndex
-        if ($index -gt 0) {
-            $entry = $favoriteList.SelectedItem
-            $favoriteList.Items.RemoveAt($index); $favoriteList.Items.Insert($index - 1,$entry)
-            $favoriteList.SelectedIndex = $index - 1
-        }
-    })
-    $down.Add_Click({
-        $index = $favoriteList.SelectedIndex
-        if ($index -ge 0 -and $index -lt $favoriteList.Items.Count - 1) {
-            $entry = $favoriteList.SelectedItem
-            $favoriteList.Items.RemoveAt($index); $favoriteList.Items.Insert($index + 1,$entry)
-            $favoriteList.SelectedIndex = $index + 1
-        }
-    })
-    $always.Add_CheckedChanged({ if ($favoriteList.SelectedIndex -ge 0) { $favoriteList.SelectedItem.LaunchAlways = [bool]$always.Checked } })
-    $nameBox.Add_TextChanged({
-        if ($favoriteList.SelectedIndex -ge 0) {
-            $entry = $favoriteList.SelectedItem; $entry.Name = $nameBox.Text
-        }
-    })
-    $nameBox.Add_Leave({
-        if ($favoriteList.SelectedIndex -ge 0) {
-            $index = $favoriteList.SelectedIndex
-            $favoriteList.Items[$index] = $favoriteList.SelectedItem
-        }
-    })
-    $processBox.Add_TextChanged({ if ($favoriteList.SelectedIndex -ge 0) {
-        $entry = $favoriteList.SelectedItem
-        if ($entry.ProcessName -ine $processBox.Text) { $entry.ExecutablePath = ''; $entry.AppId = '' }
-        $entry.ProcessName = $processBox.Text.Trim() -replace '\.exe$', ''
-    } })
-    $titleBox.Add_TextChanged({ if ($favoriteList.SelectedIndex -ge 0) { $favoriteList.SelectedItem.TitleContains = $titleBox.Text } })
-    $fileButton.Add_Click({
-        try {
-            $path = Select-TaskPloppFile
-            if ($path) {
-                $entry = $favoriteList.SelectedItem; $entry.StartKind = 'Path'; $entry.StartTarget = $path
-                $targetBox.Text = $path
-            }
-        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
-    })
-    $appButton.Add_Click({
-        try {
-            $app = Select-TaskPloppItem 'Installierte App auswaehlen' @(Get-InstalledAppChoices | Where-Object AppId -match '!') 'Name'
-            if ($app) {
-                $entry = $favoriteList.SelectedItem
-                $entry.StartKind = 'AppId'; $entry.StartTarget = $app.AppId; $entry.AppId = $app.AppId
-                $entry.ExecutablePath = ''; $targetBox.Text = $app.AppId
-            }
-        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
-    })
-    $addWindow.Add_Click({
-        try {
-            $items = @(Get-AppWindows | Sort-Object ProcessName,Title | ForEach-Object {
-                $_ | Add-Member -NotePropertyName DisplayName -NotePropertyValue ("{0} | {1}" -f (Get-AppDisplayName $_.ProcessName $_.AppId),$_.Title) -PassThru
-            })
-            $window = Select-TaskPloppItem 'Fenster fuer neuen Favoriten auswaehlen' $items 'DisplayName'
-            if ($window) {
-                $entry = New-FavoriteFromWindow $window
-                [void]$favoriteList.Items.Add($entry); $favoriteList.SelectedItem = $entry
-            }
-        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
-    })
-    $addFile.Add_Click({
-        try {
-            $path = Select-TaskPloppFile
-            if ($path) {
-                $entry = [pscustomobject]@{ Name = [IO.Path]::GetFileNameWithoutExtension($path)
-                    ProcessName = Get-ShortcutProcessName $path; TitleContains = ''; ExecutablePath = ''
-                    AppId = ''; StartKind = 'Path'; StartTarget = $path }
-                $entry | Add-Member -NotePropertyName LaunchAlways -NotePropertyValue $false
-                $entry | Add-Member -NotePropertyName FolderPath -NotePropertyValue ''
-                if ([IO.Path]::GetExtension($path) -ieq '.exe') { $entry.ExecutablePath = $path }
-                [void]$favoriteList.Items.Add($entry); $favoriteList.SelectedItem = $entry
-            }
-        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
-    })
-    $addApp.Add_Click({
-        try {
-            $app = Select-TaskPloppItem 'Installierte App auswaehlen' @(Get-InstalledAppChoices | Where-Object AppId -match '!') 'Name'
-            if ($app) {
-                $entry = [pscustomobject]@{ Name = $app.Name; ProcessName = $app.Name; TitleContains = ''
-                    ExecutablePath = ''; AppId = $app.AppId; StartKind = 'AppId'; StartTarget = $app.AppId; LaunchAlways = $false; FolderPath = '' }
-                [void]$favoriteList.Items.Add($entry); $favoriteList.SelectedItem = $entry
-            }
-        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
-    })
-    $remove.Add_Click({ if ($favoriteList.SelectedIndex -ge 0) { $favoriteList.Items.RemoveAt($favoriteList.SelectedIndex) } })
-
     $hidden = New-Object Windows.Forms.ListBox
     $hidden.Dock = 'Fill'; $hidden.DisplayMember = 'Name'
     foreach ($rule in @($working.HiddenWindows)) { [void]$hidden.Items.Add($rule) }
     $restore = New-Object Windows.Forms.Button
     $restore.Text = 'Ausgewaehltes Programm wieder anzeigen'; $restore.Dock = 'Bottom'; $restore.Height = 40
-    $restore.Add_Click({ if ($hidden.SelectedIndex -ge 0) { $hidden.Items.RemoveAt($hidden.SelectedIndex) } })
+
     $hiddenTab.Controls.Add($hidden); $hiddenTab.Controls.Add($restore)
 
     $footer = New-Object Windows.Forms.FlowLayoutPanel
     $footer.Dock = 'Bottom'; $footer.Height = 48
     $show = New-Object Windows.Forms.CheckBox
     $show.Text = 'Weitere offene Fenster anzeigen'; $show.Width = 280; $show.Checked = $working.ShowOpenWindows
-    $save = New-Object Windows.Forms.Button
-    $save.Name = 'SaveSettings'
-    $save.Text = 'Speichern'; $save.AutoSize = $true
-    $cancel = New-Object Windows.Forms.Button
-    $cancel.Name = 'CancelSettings'
-    $cancel.Text = 'Abbrechen'; $cancel.AutoSize = $true; $cancel.DialogResult = 'Cancel'
-    $save.Add_Click({
-        try {
-            $working.Programs = @($favoriteList.Items | ForEach-Object { $_ })
-            $working.HiddenWindows = @($hidden.Items | ForEach-Object { $_ })
-            $working.ShowOpenWindows = [bool]$show.Checked
-            $working.AutoLockEnabled=[bool]$lockEnabled.Checked
-            $working.AutoLockMinutes=[int]$lockMinutes.Value
-            $working.WindowLayoutModel=$layoutModel.Text.Trim()
-            $working.DictationEngine=if($dictationChoice.SelectedIndex -eq 1){'Vosk'}else{'Whisper'}
-            $working.HotkeyModifiers=0
-            foreach($check in $hotkeyChecks){if($check.Checked){$working.HotkeyModifiers=$working.HotkeyModifiers -bor [int]$check.Tag}}
-            $working.HotkeyKey=[string]$hotkeyKey.SelectedItem
-            foreach ($entry in $working.Programs) {
-                $entry.Name = $entry.Name.Trim(); $entry.ProcessName = $entry.ProcessName.Trim()
-                if (-not $entry.Name -or -not $entry.ProcessName) { throw 'Bitte Buttonname und Programmkennung ausfuellen.' }
-                if (-not $entry.StartKind) {
-                    $target = Resolve-FavoriteStart $entry
-                    $entry.StartKind = $target.Kind; $entry.StartTarget = $target.Target
-                }
-            }
-            $hotkeyChanged=$script:Settings.HotkeyModifiers -ne $working.HotkeyModifiers -or $script:Settings.HotkeyKey -ne $working.HotkeyKey
-            Save-TaskPloppSettingsWithHotkey $working
-            $script:Settings = $working
-            Update-TaskPloppTrayText
-            Apply-TaskPloppIdleSettings -Notify
-            if($hotkeyChanged){Set-TaskPloppMessage 'Success' 'Tastenkombination gespeichert' (Get-TaskPloppHotkeySpec $working).Label}
-            $dialog.DialogResult = 'OK'
-        } catch { Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $_.Exception.Message }
-    })
-    $footer.Controls.AddRange(@($show,$save,$cancel))
+    $close=[Windows.Forms.Button]::new();$close.Name='CloseSettings';$close.Text='Schliessen';$close.AutoSize=$true;$close.DialogResult='OK'
+    $footer.Controls.AddRange(@($show,$close))
     $script:ConfigurationMessageBar=New-TaskPloppMessageBar
     $script:ConfigurationMessageBar.Name='ConfigurationMessages';$script:ConfigurationMessageBar.Dock='Fill'
     $script:ConfigurationMessageBar.Margin=[Windows.Forms.Padding]::new(0)
@@ -420,9 +271,137 @@ function Show-TaskPloppConfiguration {
     $footerHost.ColumnCount=1;$footerHost.RowCount=2;$footerHost.Padding=[Windows.Forms.Padding]::new(10,3,10,3)
     $footer.Margin=[Windows.Forms.Padding]::new(0);$footer.Dock='Fill'
     $footerHost.Controls.Add($script:ConfigurationMessageBar,0,0);$footerHost.Controls.Add($footer,0,1)
-    $dialog.Controls.Add($tabs);$dialog.Controls.Add($footerHost);$dialog.CancelButton=$cancel
+    $dialog.Controls.Add($tabs);$dialog.Controls.Add($footerHost);$dialog.CancelButton=$close
     $editor.Enabled = $false
-    if ($favoriteList.Items.Count -gt 0) { $favoriteList.SelectedIndex = 0 }
+
+    $nameBox.Name='FavoriteName';$processBox.Name='FavoriteProcess';$titleBox.Name='FavoriteTitle';$targetBox.Name='FavoriteTarget'
+    $always.Name='FavoriteAlways';$hidden.Name='HiddenWindowList';$restore.Name='RestoreHiddenWindow';$show.Name='ShowOpenWindows'
+    $addWindow.Name='AddWindowFavorite';$addFile.Name='AddFileFavorite';$addApp.Name='AddAppFavorite';$remove.Name='RemoveFavorite'
+    $configState=@{Loading=$true;EditingIndex=-1;LastError=''}
+    $loadFavorite={
+        param([int]$index)
+        $configState.Loading=$true
+        try{
+            $favoriteList.SelectedIndex=$index;$configState.EditingIndex=$index
+            $editor.Enabled=$index-ge0;$up.Enabled=$index-gt0;$down.Enabled=$index-ge0-and$index-lt$favoriteList.Items.Count-1
+            if($index-ge0){$entry=$script:Settings.Programs[$index];$nameBox.Text=$entry.Name;$processBox.Text=$entry.ProcessName;$titleBox.Text=$entry.TitleContains;$always.Checked=$entry.LaunchAlways;$targetBox.Text=$entry.StartTarget}
+            else{$nameBox.Clear();$processBox.Clear();$titleBox.Clear();$targetBox.Clear();$always.Checked=$false}
+        }finally{$configState.Loading=$false}
+    }
+    $reload={
+        param([int]$selection)
+        $configState.Loading=$true
+        try{
+            $favoriteList.Items.Clear();foreach($entry in @($script:Settings.Programs)){[void]$favoriteList.Items.Add($entry)}
+            $hidden.Items.Clear();foreach($rule in @($script:Settings.HiddenWindows)){[void]$hidden.Items.Add($rule)}
+            $lockEnabled.Checked=$script:Settings.AutoLockEnabled;$lockMinutes.Value=$script:Settings.AutoLockMinutes
+            $show.Checked=$script:Settings.ShowOpenWindows;$layoutModel.Text=$script:Settings.WindowLayoutModel
+            $dictationChoice.SelectedIndex=if($script:Settings.DictationEngine-eq'Vosk'){1}else{0}
+            foreach($check in $hotkeyChecks){$check.Checked=($script:Settings.HotkeyModifiers-band[int]$check.Tag)-ne0}
+            $hotkeyKey.SelectedItem=$script:Settings.HotkeyKey
+            $selection=[Math]::Min($selection,$favoriteList.Items.Count-1)
+            & $loadFavorite $selection
+        }finally{$configState.Loading=$false}
+    }
+    $commit={
+        param([scriptblock]$Change,[int]$Selection=-2)
+        if($configState.Loading){return}
+        if($Selection-eq-2){$Selection=$configState.EditingIndex}
+        try{
+            $candidate=ConvertTo-TaskPloppSettings ($script:Settings|ConvertTo-Json -Depth 8|ConvertFrom-Json)
+            & $Change $candidate
+            $candidate=ConvertTo-TaskPloppSettings $candidate
+            if(($candidate|ConvertTo-Json -Depth 8 -Compress)-ceq($script:Settings|ConvertTo-Json -Depth 8 -Compress)){return}
+            Save-TaskPloppSettingsWithHotkey $candidate
+        }catch{
+            $configState.LastError='Aenderung nicht uebernommen. Bisheriger Wert wiederhergestellt. '+$_.Exception.Message
+            & $reload $configState.EditingIndex
+            Set-TaskPloppMessage Error 'Konfiguration nicht uebernommen' $configState.LastError
+            return
+        }
+        $script:Settings=$candidate;$configState.LastError=''
+        try{
+            & $reload $Selection
+            Update-TaskPloppTrayText;Apply-TaskPloppIdleSettings
+            if($script:HotkeyCleanupWarning){Set-TaskPloppMessage Warning 'Einstellung gespeichert' $script:HotkeyCleanupWarning}
+            else{Set-TaskPloppMessage Success 'Einstellung gespeichert' ''}
+        }catch{Set-TaskPloppMessage Warning 'Einstellung gespeichert, Anzeige nicht vollstaendig aktualisiert' 'Die gespeicherte Aenderung bleibt erhalten. Konfiguration erneut oeffnen.'}
+    }
+    $commitFavorite={
+        if($configState.Loading-or$configState.EditingIndex-lt0){return}
+        $index=$configState.EditingIndex;$newName=$nameBox.Text.Trim();$newProcess=$processBox.Text.Trim()-replace'\.exe$','';$newTitle=$titleBox.Text
+        & $commit {
+            param($c)
+            if(-not$newName-or-not$newProcess){throw 'Bitte Buttonname und Programmkennung ausfuellen.'}
+            $entry=$c.Programs[$index];$entry.Name=$newName;$entry.TitleContains=$newTitle
+            if($entry.ProcessName-ine$newProcess){$entry.ExecutablePath='';$entry.AppId=''}
+            $entry.ProcessName=$newProcess
+        }
+    }
+    $commitKey={
+        if($configState.Loading-or-not$keyInput.Text){return}
+        try{Save-TaskPloppOpenAIKey $keyInput.Text}
+        catch{
+            $keyInput.Clear();$configState.LastError='API-Key nicht uebernommen. Der bisherige Key bleibt erhalten. Eingabe und Schreibrechte pruefen.'
+            Set-TaskPloppMessage Error 'API-Key nicht gespeichert' $configState.LastError
+            return
+        }
+        $keyInput.Clear();$configState.LastError='';$keyState.Text='Lokal eingerichtet (nicht online geprueft).'
+        Set-TaskPloppMessage Success 'API-Key lokal gespeichert' 'Gilt sofort auf diesem PC. Keine Online-Pruefung durchgefuehrt.'
+    }
+    foreach($box in @($nameBox,$processBox,$titleBox)){$box.Add_Leave($commitFavorite)}
+    $layoutModel.Add_Leave({$value=$layoutModel.Text.Trim();& $commit {param($c)$c.WindowLayoutModel=$value}})
+    $keyInput.Add_Leave($commitKey)
+    $favoriteList.Add_SelectedIndexChanged({if(-not$configState.Loading){$next=$favoriteList.SelectedIndex;& $commitFavorite;& $loadFavorite $next}})
+    $up.Add_Click({& $commitFavorite;$index=$configState.EditingIndex;if($index-gt0){& $commit {param($c)$swap=$c.Programs[$index-1];$c.Programs[$index-1]=$c.Programs[$index];$c.Programs[$index]=$swap} ($index-1)}})
+    $down.Add_Click({& $commitFavorite;$index=$configState.EditingIndex;if($index-ge0-and$index-lt$script:Settings.Programs.Count-1){& $commit {param($c)$swap=$c.Programs[$index+1];$c.Programs[$index+1]=$c.Programs[$index];$c.Programs[$index]=$swap} ($index+1)}})
+    $always.Add_CheckedChanged({if(-not$configState.Loading-and$configState.EditingIndex-ge0){$index=$configState.EditingIndex;$value=$always.Checked;& $commit {param($c)$c.Programs[$index].LaunchAlways=$value}}})
+    $fileButton.Add_Click({
+        try{$path=Select-TaskPloppFile;if($path){$index=$configState.EditingIndex;& $commit {param($c)$c.Programs[$index].StartKind='Path';$c.Programs[$index].StartTarget=$path}}}
+        catch{Set-TaskPloppMessage Error 'Startziel nicht uebernommen' $_.Exception.Message}
+    })
+    $appButton.Add_Click({
+        try{$app=Select-TaskPloppItem 'Installierte App auswaehlen' @(Get-InstalledAppChoices|Where-Object AppId -match '!') Name
+            if($app){$index=$configState.EditingIndex;& $commit {param($c)$entry=$c.Programs[$index];$entry.StartKind='AppId';$entry.StartTarget=$app.AppId;$entry.AppId=$app.AppId;$entry.ExecutablePath=''}}}
+        catch{Set-TaskPloppMessage Error 'Startziel nicht uebernommen' $_.Exception.Message}
+    })
+    $addWindow.Add_Click({
+        try{$items=@(Get-AppWindows|Sort-Object ProcessName,Title|ForEach-Object {$_|Add-Member NoteProperty DisplayName ("{0} | {1}"-f(Get-AppDisplayName $_.ProcessName $_.AppId),$_.Title) -PassThru})
+            $window=Select-TaskPloppItem 'Fenster fuer neuen Favoriten auswaehlen' $items DisplayName
+            if($window){$entry=New-FavoriteFromWindow $window;& $commit {param($c)$c.Programs=@($c.Programs)+@($entry)} $script:Settings.Programs.Count}}
+        catch{Set-TaskPloppMessage Error 'Favorit nicht hinzugefuegt' $_.Exception.Message}
+    })
+    $addFile.Add_Click({
+        try{$path=Select-TaskPloppFile;if($path){$entry=[pscustomobject]@{Name=[IO.Path]::GetFileNameWithoutExtension($path);ProcessName=(Get-ShortcutProcessName $path);TitleContains='';ExecutablePath='';AppId='';StartKind='Path';StartTarget=$path;LaunchAlways=$false;FolderPath=''}
+            if([IO.Path]::GetExtension($path)-ieq'.exe'){$entry.ExecutablePath=$path}
+            & $commit {param($c)$c.Programs=@($c.Programs)+@($entry)} $script:Settings.Programs.Count}}
+        catch{Set-TaskPloppMessage Error 'Favorit nicht hinzugefuegt' $_.Exception.Message}
+    })
+    $addApp.Add_Click({
+        try{$app=Select-TaskPloppItem 'Installierte App auswaehlen' @(Get-InstalledAppChoices|Where-Object AppId -match '!') Name
+            if($app){$entry=[pscustomobject]@{Name=$app.Name;ProcessName=$app.Name;TitleContains='';ExecutablePath='';AppId=$app.AppId;StartKind='AppId';StartTarget=$app.AppId;LaunchAlways=$false;FolderPath=''}
+                & $commit {param($c)$c.Programs=@($c.Programs)+@($entry)} $script:Settings.Programs.Count}}
+        catch{Set-TaskPloppMessage Error 'Favorit nicht hinzugefuegt' $_.Exception.Message}
+    })
+    $remove.Add_Click({$index=$configState.EditingIndex;if($index-ge0){& $commit {param($c)$c.Programs=@(for($i=0;$i-lt$c.Programs.Count;$i++){if($i-ne$index){$c.Programs[$i]}})} ([Math]::Max(0,$index-1))}})
+    $restore.Add_Click({$index=$hidden.SelectedIndex;if($index-ge0){& $commit {param($c)$c.HiddenWindows=@(for($i=0;$i-lt$c.HiddenWindows.Count;$i++){if($i-ne$index){$c.HiddenWindows[$i]}})}}})
+    $show.Add_CheckedChanged({$value=$show.Checked;& $commit {param($c)$c.ShowOpenWindows=$value}})
+    $lockEnabled.Add_CheckedChanged({$value=$lockEnabled.Checked;& $commit {param($c)$c.AutoLockEnabled=$value}})
+    $lockMinutes.Add_ValueChanged({$value=[int]$lockMinutes.Value;& $commit {param($c)$c.AutoLockMinutes=$value}})
+    $dictationChoice.Add_SelectedIndexChanged({$value=if($dictationChoice.SelectedIndex-eq1){'Vosk'}else{'Whisper'};& $commit {param($c)$c.DictationEngine=$value}})
+    $hotkeyChanged={
+        if($configState.Loading){return}
+        $bits=0;foreach($check in $hotkeyChecks){if($check.Checked){$bits=$bits-bor[int]$check.Tag}}
+        $value=[string]$hotkeyKey.SelectedItem;& $commit {param($c)$c.HotkeyModifiers=$bits;$c.HotkeyKey=$value}
+    }
+    foreach($check in $hotkeyChecks){$check.Add_CheckedChanged($hotkeyChanged)}
+    $hotkeyKey.Add_SelectedIndexChanged($hotkeyChanged)
+    $dialog.Add_FormClosing({
+        & $commitFavorite
+        $value=$layoutModel.Text.Trim();& $commit {param($c)$c.WindowLayoutModel=$value}
+        & $commitKey
+    })
+    & $reload $(if($favoriteList.Items.Count){0}else{-1})
     if ($OnShown) { $dialog.Add_Shown($OnShown) }
     $dialog.AutoScaleDimensions=[Drawing.SizeF]::new(7,17);$dialog.AutoScaleMode='Font'
     $dialog.PerformAutoScale()
@@ -432,4 +411,5 @@ function Show-TaskPloppConfiguration {
     $script:ConfigurationOpen=$true
     try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$keyInput.Clear();$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
     Show-TaskPloppView
+    if($configState.LastError){Set-TaskPloppMessage Error 'Aenderung nicht uebernommen' $configState.LastError}
 }

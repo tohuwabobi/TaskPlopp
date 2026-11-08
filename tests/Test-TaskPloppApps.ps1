@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([switch]$StoreLaunch)
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 $testDir = Join-Path $env:TEMP ('TaskPlopp-apps-' + [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($testDir)
@@ -87,7 +87,8 @@ try {
     function Show-TaskPloppView { }
     $script:Settings.Programs = @($favorite, [pscustomobject]@{ Name='Explorer'; ProcessName='explorer'; TitleContains=''; ExecutablePath=''; AppId=''; StartKind='Path'; StartTarget=$explorer.Target })
     $script:UiFailure = $null
-    Show-TaskPloppConfiguration -OnShown {
+    function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
+            Show-TaskPloppConfiguration -OnShown {
         param($sender,$eventArgs)
         try {
             $list = $sender.Controls.Find('FavoriteList',$true)[0]
@@ -96,21 +97,23 @@ try {
             $bitmap = [Drawing.Bitmap]::new($sender.Width,$sender.Height)
             try { $sender.DrawToBitmap($bitmap,[Drawing.Rectangle]::new(0,0,$sender.Width,$sender.Height)); $bitmap.Save((Join-Path $env:TEMP 'TaskPlopp-configuration.png')) }
             finally { $bitmap.Dispose() }
-            $sender.Controls.Find('SaveSettings',$true)[0].PerformClick()
+            $sender.Controls.Find('CloseSettings',$true)[0].PerformClick()
         } catch { $script:UiFailure=$_; $sender.Close() }
     }
     if ($script:UiFailure) { throw $script:UiFailure }
     $saved = Get-Settings
     Assert ($saved.Programs[1].Name -eq 'Dateien') 'Bearbeitung im Dialog nicht gespeichert.'
     Assert ($saved.Programs[0].AppId -eq $favorite.AppId -and $saved.Programs[0].StartKind -eq 'AppId') 'App-Identitaet beim Wechsel der Auswahl verloren.'
-    Show-TaskPloppConfiguration -OnShown {
+    function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
+            Show-TaskPloppConfiguration -OnShown {
         param($sender,$eventArgs)
-        $sender.Controls.Find('FavoriteName',$true)[0].Text='Nicht speichern'
-        $sender.Controls.Find('CancelSettings',$true)[0].PerformClick()
+        $sender.Controls.Find('FavoriteName',$true)[0].Text='Codex neu'
+        $sender.Controls.Find('CloseSettings',$true)[0].PerformClick()
     }
-    Assert ($script:Settings.Programs[0].Name -eq 'Codex') 'Abbrechen hat Einstellungen veraendert.'
-    Write-Output 'OK: Konfigurationsdialog bearbeiten/speichern/abbrechen; App-Identitaet erhalten.'
-    Show-TaskPloppConfiguration -OnShown {
+    Assert ($script:Settings.Programs[0].Name -eq 'Codex neu') 'Name nicht beim Schliessen uebernommen.'
+    Write-Output 'OK: Konfigurationsdialog bearbeiten/sofort speichern; App-Identitaet erhalten.'
+    function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
+            Show-TaskPloppConfiguration -OnShown {
         param($sender,$eventArgs)
         try {
             $list=$sender.Controls.Find('FavoriteList',$true)[0]
@@ -123,20 +126,21 @@ try {
             $bitmap=[Drawing.Bitmap]::new($sender.Width,$sender.Height)
             try { $sender.DrawToBitmap($bitmap,[Drawing.Rectangle]::new(0,0,$sender.Width,$sender.Height)); $bitmap.Save((Join-Path $env:TEMP 'TaskPlopp-configuration.png')) }
             finally { $bitmap.Dispose() }
-            $sender.Controls.Find('SaveSettings',$true)[0].PerformClick()
+            $sender.Controls.Find('CloseSettings',$true)[0].PerformClick()
         } catch { $script:UiFailure=$_; $sender.Close() }
     }
     if ($script:UiFailure) { throw $script:UiFailure }
     $saved=Get-Settings
     Assert ($saved.Programs[0].Name -eq 'Dateien' -and $saved.Programs[1].AppId -eq $favorite.AppId) 'Reihenfolge oder App-ID beim Sortieren verloren.'
-    Show-TaskPloppConfiguration -OnShown {
+    function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
+            Show-TaskPloppConfiguration -OnShown {
         param($sender,$eventArgs)
         $sender.Controls.Find('FavoriteList',$true)[0].SelectedIndex=0
         $sender.Controls.Find('MoveFavoriteDown',$true)[0].PerformClick()
-        $sender.Controls.Find('CancelSettings',$true)[0].PerformClick()
+        $sender.Controls.Find('CloseSettings',$true)[0].PerformClick()
     }
-    Assert ($script:Settings.Programs[0].Name -eq 'Dateien') 'Abbrechen hat Sortierung uebernommen.'
-    Write-Output 'OK: Favoriten hoch/runter, Grenzen, Speichern/Neuladen und Abbrechen.'
+    Assert ($script:Settings.Programs[0].Name -eq 'Codex neu') 'Sortierung nicht sofort uebernommen.'
+    Write-Output 'OK: Favoriten hoch/runter, Grenzen, Sofortspeichern/Neuladen.'
 
     $apps = @(Get-InstalledAppChoices | Where-Object AppId -match '!')
     Assert ($apps.Count -gt 0) 'Keine installierten Paket-Apps gefunden.'

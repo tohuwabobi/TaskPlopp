@@ -1,9 +1,9 @@
 ﻿#requires -Version 5.1
 param([switch]$Api)
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.Native.ps1')
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.Native.ps1')
 $null=[TaskPloppInterop.Geometry]::SetThreadDpiAwarenessContext([IntPtr](-4))
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Value,[string]$Message){if(-not$Value){throw $Message}}
 function Reject($Action,[string]$Expected){try{&$Action;throw 'NOT_REJECTED'}catch{Assert ($_.Exception.Message-eq$Expected) ('Expected '+$Expected+', got '+$_.Exception.Message)}}
 $virtual=[pscustomobject]@{Monitors=@([pscustomobject]@{id='left';work=[pscustomobject]@{x=-1920;y=0;width=1920;height=1040}});Windows=@([pscustomobject]@{id='w1'})}
@@ -21,7 +21,7 @@ foreach($bad in @(
 foreach($response in @('{"status":"incomplete","output":[]}','{"status":"completed","output":[{"type":"message","content":[{"type":"refusal"}]}]}','{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"broken"}]}]}')){Reject {ConvertFrom-TaskPloppLayoutResponse ($response|ConvertFrom-Json)} API_RESPONSE}
 Write-Host 'OK: Negative coordinates, bounds, duplicate IDs, empty layout, incomplete/refused/malformed responses.'
 function Run-Worker([string]$Mode,$Request){
-    $info=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'),('-NoProfile -STA -ExecutionPolicy Bypass -File "'+(Join-Path $PSScriptRoot 'TaskPlopp.WindowLayoutWorker.ps1')+'" -Mode '+$Mode))
+    $info=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'),('-NoProfile -STA -ExecutionPolicy Bypass -File "'+(Join-Path $PSScriptRoot '..\src\TaskPlopp.WindowLayoutWorker.ps1')+'" -Mode '+$Mode))
     $bytes=[Text.Encoding]::UTF8.GetBytes(($Request|ConvertTo-Json -Depth 12 -Compress));$job=New-TaskPloppProcess $info $bytes
     try{
         $watch=[Diagnostics.Stopwatch]::StartNew()
@@ -71,7 +71,7 @@ $config=Join-Path $env:TEMP ('TaskPlopp-layout-ui-'+[guid]::NewGuid().ToString('
 [IO.File]::WriteAllText($config,'{"Programs":[],"ShowOpenWindows":false,"AutoLockEnabled":false}',[Text.UTF8Encoding]::new($true))
 $global:LayoutUiFailure=$null
 try{
-    . (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -SmokeTest -ConfigFile $config -OnShown {
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $config -OnShown {
         param($sender,$args)
         $smokeTimer.Stop()
         try{
@@ -85,10 +85,11 @@ try{
             $script:DictationJob=[pscustomobject]@{Done=$true;Disposed=$true;Text='Editor und Browser nebeneinander';Error=''}
             Invoke-TaskPloppDictationTick
             Assert ($script:TestLayoutIntent-eq'Editor und Browser nebeneinander'-and$script:DictationPendingText-eq'Existing clipboard retry') 'Layout result routed to clipboard'
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $dialog.Controls.Find('WindowLayoutModel',$true)[0].Text='gpt-4.1-mini'
-                $dialog.Controls.Find('SaveSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             Assert ((Get-Settings -Path $config).WindowLayoutModel-eq'gpt-4.1-mini') 'Model not persisted'
             $sender.Hide();$script:LayoutCapturing=$true;Show-TaskPlopp

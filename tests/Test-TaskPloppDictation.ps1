@@ -3,7 +3,7 @@
 param([switch]$Engines)
 $ErrorActionPreference='Stop'
 if($PSVersionTable.PSEdition -ne 'Desktop'){throw 'Test bitte mit Windows PowerShell 5.1 starten.'}
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 $wav=ConvertTo-TaskPloppWav ([byte[]]::new(3200))
 if($wav-isnot[byte[]]-or$wav.Length-ne3244-or[Text.Encoding]::ASCII.GetString($wav,0,4)-ne'RIFF'-or[BitConverter]::ToInt32($wav,40)-ne3200){throw 'WAV-Format oder Bytearray-Typ'}
 $caught=$false;try{$failed=New-TaskPloppDictationJob Whisper 'missing.exe' 'missing.bin' ([byte[]]::new(4000))}catch{$caught=$true}
@@ -17,7 +17,7 @@ $Root=Join-Path $env:TEMP ('TaskPlopp-download-test-'+[guid]::NewGuid().ToString
 New-Item -ItemType Directory -Path $Root | Out-Null
 try {
     $tokens=$null;$errors=$null
-    $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'Install-TaskPloppDictation.ps1'),[ref]$tokens,[ref]$errors)
+    $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '..\tools\Install-TaskPloppDictation.ps1'),[ref]$tokens,[ref]$errors)
     foreach($name in 'Download','Progress-Line'){
         $definition=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
         . ([scriptblock]::Create($definition.Extent.Text))

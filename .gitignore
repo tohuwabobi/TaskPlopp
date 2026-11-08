@@ -11,3 +11,7 @@
 .codex/
 Thumbs.db
 Desktop.ini
+
+/data/config.json
+/data/backups/
+/data/legacy/

@@ -7,7 +7,7 @@ $global:TransferUiFailure=$null
 $global:TransferTestRoot=Join-Path $env:TEMP ('TaskPlopp-transfer-inline-'+[guid]::NewGuid().ToString('N'))
 $null=[IO.Directory]::CreateDirectory($global:TransferTestRoot)
 try{
-    . (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -SmokeTest -ConfigFile $config -OnShown {
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $config -OnShown {
         param($sender,$args)
         try{
             $gear=$sender.Controls.Find('ConfigurationButton',$true)[0]
@@ -24,11 +24,12 @@ try{
                 $dialog.Controls.Find('CloseTransfer',$true)[0].PerformClick()
             }
             Assert ($script:TransferOpened-eq1-and$null-eq$script:TransferDialog) 'Schliessen gibt Dialog nicht frei'
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 Show-TaskPloppTransfer -OnShown {$script:TransferOpened++}
                 Assert ($script:TransferOpened-eq1) 'Transferdialog ueber Konfigurationsentwurf geoeffnet'
-                $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             # Invoke the real context-menu handler, closing its modal dialog with a timer.
             $closer=[Windows.Forms.Timer]::new();$closer.Interval=50

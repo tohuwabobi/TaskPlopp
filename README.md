@@ -4,7 +4,7 @@ Kleiner lokaler Fensterumschalter fuer Windows PowerShell 5.1 mit Windows Forms.
 Eigener Programm-, Installer- und Testcode besteht aus PowerShell;
 `Setup.bat` dient als Einstieg per Doppelklick.
 Es wird kein C#-Quelltext kompiliert und keine eigene Hilfs-DLL erzeugt. Die kleine
-Datei `TaskPlopp.Native.ps1` deklariert benoetigte Windows-/COM-Schnittstellen ueber
+Datei `src\TaskPlopp.Native.ps1` deklariert benoetigte Windows-/COM-Schnittstellen ueber
 .NET-Laufzeitmetadaten. Windows Forms, Windows-APIs und die nativen Whisper-/Vosk-
 Programme bleiben die vorhandenen Laufzeitabhaengigkeiten.
 Keine Zusatzmodule, kein Administrator und kein Autostart. Ein kleiner lokaler Prozess haelt den Hotkey aktiv.
@@ -19,17 +19,17 @@ diesem Ordner gestartet, deshalb den Ordner danach nicht verschieben oder loesch
 Das Setup laedt nichts herunter. Die optionalen Diktat-Komponenten lassen sich
 spaeter ueber die Diktat-Funktion in TaskPlopp installieren.
 
-Nach einem Git-Clone kann `config.example.json` als `config.json` kopiert werden.
+Nach einem Git-Clone kann `data\config.example.json` als `data\config.json` kopiert werden.
 Ohne Konfiguration startet TaskPlopp mit leerer Favoritenliste; Favoriten lassen
-sich anschliessend ueber die GUI hinzufuegen. Persoenliche `config.json`, deren
-Sicherungen und `shortcuts` werden nicht in Git versioniert. `Set-LocalFavorites.ps1`
+sich anschliessend ueber die GUI hinzufuegen. Persoenliche `data\config.json`, deren
+Sicherungen und `shortcuts` werden nicht in Git versioniert. `tools\Set-LocalFavorites.ps1`
 und der zugehoerige lokale Test enthalten die Einrichtung fuer Tobias' Rechner
 und sind kein allgemeiner Installationsschritt fuer andere Nutzer.
 
 Alternativ einmal in Windows PowerShell ausfuehren:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\CodexProjekte\TaskPlopp\Install-Shortcut.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\CodexProjekte\TaskPlopp\tools\Install-Shortcut.ps1
 ```
 
 Die Desktop-Verknuepfung startet TaskPlopp und aktiviert die gespeicherte globale
@@ -44,9 +44,9 @@ erscheint der Hinweis in der Statusleiste; die GUI bleibt ueber das Symbol errei
 Unter **Konfiguration > Tastenkombination** lassen sich Strg, Alt, Umschalt und Win
 mit A-Z, 0-9 oder einer Funktionstaste kombinieren. Mindestens eine Zusatztaste ist
 erforderlich; F12 bleibt entsprechend der Windows-Vorgabe ausgespart. Die Vorschau
-zeigt die Auswahl. **Speichern** registriert die neue Kombination sofort, ohne
+zeigt die Auswahl. Jede Aenderung registriert die neue Kombination sofort, ohne
 Neustart. Bei Belegung oder Speicherfehler bleiben die alte Kombination und die
-gespeicherten Einstellungen erhalten. **Abbrechen** aendert nichts. Dieselbe
+gespeicherten Einstellungen erhalten; die Anzeige kehrt zum bisherigen Wert zurueck. Dieselbe
 gespeicherte Kombination wird beim naechsten Programmstart wieder registriert und
 im Infobereich angezeigt. Die Desktop-Verknuepfung selbst braucht keine Aenderung.
 Windows-Kombinationen koennen vom Betriebssystem reserviert sein; die Weiterleitung
@@ -56,13 +56,13 @@ innerhalb Citrix muss mit der gewaehlten Kombination vor Ort getestet werden.
 Eine vorhandene TaskPlopp-Verknuepfung aktualisieren:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\CodexProjekte\TaskPlopp\Install-Shortcut.ps1 -Update
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\CodexProjekte\TaskPlopp\tools\Install-Shortcut.ps1 -Update
 ```
 
 Direkter Start:
 
 ```powershell
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\TaskPlopp.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\src\TaskPlopp.ps1
 ```
 
 ## Bedienung
@@ -149,7 +149,7 @@ beide Ueberwachungen gleichzeitig betreiben.
 - Die Zuordnung folgt der sichtbaren Reihenfolge: erst Favoriten, dann weitere
   Fenster. Jeder Favorit belegt genau einen Platz, auch ohne offenes Fenster
   oder mit mehreren Fenstern. Unter **Konfiguration > Favoriten** den Eintrag
-  auswaehlen und mit **Nach oben / Nach unten** verschieben, dann **Speichern**.
+  auswaehlen und mit **Nach oben / Nach unten** verschieben; die Reihenfolge wird sofort gespeichert.
   So bleibt der erste Favorit auf **1**, der zweite auf **2** usw. Bei mehreren
   passenden Fenstern aktiviert der normale Klick das vorderste passende Fenster;
   per Rechtsklick lassen sich die einzelnen Fenster auswaehlen.
@@ -178,8 +178,8 @@ beide Ueberwachungen gleichzeitig betreiben.
   Startverknuepfungen, die einen Launcher statt der eigentlichen App starten,
   kann eine Korrektur noetig sein. Neue Favoriten aus Fenstern verwenden zusaetzlich
   den Programmpfad oder die App-ID, damit Apps mit gleichem Prozessnamen getrennt bleiben.
-- **Speichern** uebernimmt die Aenderungen in `config.json`; **Abbrechen** verwirft
-  die Dialogaenderungen. Bestehende Favoriten werden weiter unterstuetzt.
+- Aenderungen werden automatisch uebernommen: Schalter und Auswahlen sofort,
+  Textfelder beim Verlassen oder Schliessen. Bestehende Favoriten bleiben erhalten.
 - Die Liste **Weitere Fenster** zeigt eine Alt+Tab-aehnliche Auswahl einschliesslich
   minimierter Fenster. Toolfenster, nicht aktivierbare und von Windows ausgeblendete
   Fenster werden herausgefiltert. Eine exakte Kopie der Windows-Alt+Tab-Liste ist
@@ -224,7 +224,7 @@ ueber seine Shell-Ordneradresse erkannt; andernfalls startet die Verknuepfung
 Explorer mit genau diesem Ordner. Andere Explorer-Fenster gelten nicht als Treffer.
 Bei Explorer-Fenstern mit mehreren Tabs kann die Shell je nach Windows-Version nur
 den aktiven Tab melden; TaskPlopp schaltet keine Hintergrund-Tabs gezielt um.
-Die Links liegen unter `shortcuts`. `Set-LocalFavorites.ps1` richtet die vier
+Die Links liegen unter `shortcuts`. `tools\Set-LocalFavorites.ps1` richtet die vier
 lokalen Eintraege erneut ein und sichert vorher `config.json`. Dabei ersetzt es
 die generischen Chrome-/Explorer-Favoriten und setzt deren vereinbarte Reihenfolge.
 
@@ -254,8 +254,8 @@ verwendet; Python, pip, GPU und API-Schluessel werden nicht gebraucht.
 Normalerweise sind keine Adminrechte erforderlich. Fehlende Systemkomponenten
 oder gesperrte Downloads werden als Fehler angezeigt.
 
-Die Auswahl **whisper.cpp / Vosk** gilt nach Speichern fuer das naechste Diktat.
-Die Einrichtung selbst installiert sofort, auch wenn der Dialog danach abgebrochen
+Die Auswahl **whisper.cpp / Vosk** wird sofort fuer das naechste Diktat gespeichert.
+Die Einrichtung selbst installiert sofort, auch wenn der Dialog danach geschlossen
 wird. Beide Engines werden nach dem Entpacken mit synthetischer Stille geprueft;
 erst danach gelten sie als bereit. Fortschritt und Fehler stehen sowohl im
 Konfigurationsdialog als auch in der gemeinsamen Statusleiste.
@@ -307,7 +307,7 @@ Keine Behauptung eines unabhaengigen Hashnachweises fuer diese Vosk-Dateien.
 **Rechtsklick auf das Zahnrad > Konfiguration sichern/uebertragen** oder derselbe
 Eintrag im Infobereich oeffnet einen kleinen Dialog mit Exportieren und Importieren.
 Der normale Zahnradklick bleibt die Konfiguration. Export sichert den gespeicherten
-Stand; ein noch offener Konfigurationsentwurf muss zuerst geschlossen werden.
+Stand; ein noch offener Konfigurationsdialog muss zuerst geschlossen werden.
 
 Die ZIP enthaelt `config.json` und nur die direkt referenzierten Verknuepfungen unter
 `links/0001.lnk` usw. Keine Formatversion, kein Manifest. LNK-Dateien bleiben binaer
@@ -346,19 +346,19 @@ aufrufbare Bedienhilfen.
 ## Pruefung
 
 ```powershell
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppLayout.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppNative.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppTransfer.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppTransferUi.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPlopp.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudio.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppAudioUi.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppIdleLock.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppHotkey.ps1
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppDictation.ps1 -Engines
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppDictationUi.ps1 -Engines
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\Test-TaskPloppApps.ps1 -StoreLaunch
-powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\TaskPlopp.ps1 -SmokeTest
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppLayout.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppNative.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppTransfer.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppTransferUi.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPlopp.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppAudio.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppAudioUi.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppIdleLock.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppHotkey.ps1
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppDictation.ps1 -Engines
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppDictationUi.ps1 -Engines
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\tests\Test-TaskPloppApps.ps1 -StoreLaunch
+powershell.exe -NoProfile -STA -File C:\CodexProjekte\TaskPlopp\src\TaskPlopp.ps1 -SmokeTest
 ```
 
 Mit `-ResidentTest` statt `-SmokeTest` werden Ausblenden und erneutes Einblenden im gleichen Prozess inklusive Zeitmessung geprueft.
@@ -387,7 +387,7 @@ Hoer-/Mikrofonprobe und der Einsatz innerhalb von Citrix bleiben manuell zu prue
 
 Der IdleLock-Test simuliert Zeit und Eingaben ohne echten Sperraufruf. Er prueft
 Minutenvalidierung, Migration alter Einstellungen, neue Frist bei Aenderungen,
-Toolbar-/Konfigurationssynchronisierung, Abbrechen und Lebensdauer des Timers.
+Toolbar-/Konfigurationssynchronisierung, Sofortspeichern und Lebensdauer des Timers.
 Die UI benutzt eine temporaere Konfiguration; ihre Vorschau steht unter
 `%TEMP%\TaskPlopp-idle-config.png`. Eine tatsaechliche PC-Sperre und das Verhalten
 bei Eingaben innerhalb von Citrix sind anschliessend lokal zu pruefen.
@@ -426,7 +426,7 @@ Oeffnung und Schliessen. Echte Uebertragung auf einen anderen PC bleibt ein Prax
 
 Die eigene Lupe mit Plopp-Stern liegt unter `assets\TaskPlopp.ico` und wird fuer
 Fenster, Infobereich und Desktop-Verknuepfung verwendet. SVG und PNG liegen daneben.
-`Build-Icon.ps1` erzeugt aus den Zeichenbefehlen neun ICO-Aufloesungen (16 bis 256 px).
+`tools\Build-Icon.ps1` erzeugt aus den Zeichenbefehlen neun ICO-Aufloesungen (16 bis 256 px).
 
 Der Layouttest verwendet isolierte Favoriten und misst gleiche Raender/Kanten,
 Toolbargruppen und lange Ueberschriften bei kleiner/grosser Ansicht und Schrift.
@@ -464,7 +464,7 @@ Bilder und Schluessel bleiben lokal ausschliesslich im Worker-RAM, ohne Bildarch
 Das normale Mikrofon-Diktat schreibt weiterhin nur Text in die Zwischenablage;
 der Fensterordner veraendert deren Inhalt nicht.
 
-`Test-TaskPloppWindowLayout.ps1` prueft den Vertrag und bewegt nur eigene Testfenster.
+`tests\Test-TaskPloppWindowLayout.ps1` prueft den Vertrag und bewegt nur eigene Testfenster.
 Mit `-Api` kommen zwei echte API-Aufrufe ausschliesslich mit kuenstlichen Inhalten
 hinzu (Metadaten allein / mit selbst gezeichnetem Testbild). Reale Desktopbilder
 werden dabei nicht hochgeladen. Siehe `docs/Verifier_2026_11_08_KI_Fensterordner.md`.
@@ -473,14 +473,14 @@ Eine bereits laufende TaskPlopp-Instanz muss zum Laden der neuen Version neu sta
 ## API-Key bequem einrichten
 
 Unter **Zahnrad > Fensterordner** den OpenAI-Key in das verdeckte Feld eingeben
-und **API-Key speichern** anklicken. Bei Erfolg leert sich das Feld und die
+und das Feld verlassen oder die Konfiguration schliessen. Bei Erfolg leert sich das Feld und die
 Statusleiste meldet gruen **API-Key lokal gespeichert**. Es erfolgt dabei kein
 Online-Test; die API-Gueltigkeit zeigt sich beim Einsatz des Fensterordners.
 Ein vorhandener Key wird nie in die Maske geladen. Unverwendbare lokale Dateien
 werden angezeigt und koennen durch eine neue Eingabe ersetzt werden.
 
-**API-Key speichern** wirkt sofort, getrennt von den uebrigen Einstellungen.
-**Abbrechen** unten nimmt diesen bereits erfolgten Schritt nicht zurueck.
+Es gibt keinen Speicherbutton. Ein leer gelassenes Keyfeld aendert nichts.
+Waehrend des Tippens wird der Key nicht gespeichert. Fehlerhafte Eingabe wird geleert.
 Leere/ungueltige Eingaben und fehlgeschlagenes Speichern erhalten einen bisherigen
 Key. Der Key liegt weiterhin ausschliesslich lokal mit DPAPI fuer dieses Windows-Konto
 geschuetzt vor. Keine Konsole oder Administratorrechte erforderlich.
@@ -496,7 +496,44 @@ geschuetzt vor. Keine Konsole oder Administratorrechte erforderlich.
 - **TaskPlopp beenden** im Tray beendet den Prozess tatsaechlich.
 - Fuer einen unverdeckten Screenshot wird die GUI weiterhin kurz intern verborgen.
 
-`Test-TaskPloppKeyAndWindow.ps1` prueft Schluesselspeicherung ausschliesslich mit
+`tests\Test-TaskPloppKeyAndWindow.ps1` prueft Schluesselspeicherung ausschliesslich mit
 kuenstlichen Werten in Tempordnern und testet die Fensterzustaende ohne Benutzerfenster
 zu bewegen. Keine echten Schluessel oder API-Anfragen. Abnahme und Grenzen:
 `docs/Verifier_2026_11_08_API_Key_und_Minimieren.md`.
+## Sofortspeichern und Leertaste
+
+Die Konfiguration hat nur **Schliessen**, keinen Speicher- oder Abbrechen-Button.
+Auswahlen, Schalter, Minuten und Favoritenaktionen werden sofort gespeichert.
+Textfelder und API-Key werden beim Verlassen des Feldes oder beim Schliessen
+abgeschlossen. Es gibt keinen Timer, der einen angefangenen Text/Key uebernimmt.
+Ungueltige oder nicht speicherbare Aenderungen erhalten den alten Stand; die Anzeige
+springt darauf zurueck und die Statusleiste erklaert den Fehler. Ein falscher Key
+wird geleert. Eine Konfigurationsaenderung setzt die PC-Sperrfrist nur zurueck, wenn
+Ein/Aus oder Minuten der Sperre geaendert wurden.
+
+**Leertaste** minimiert die aktive Hauptansicht (Tasks oder Audio) in die Taskleiste,
+ohne den fokussierten Button auszuloesen. Aufnahme laeuft dabei weiter. In Text-/
+Auswahlfeldern, Konfiguration, Kontextmenues und anderen Dialogen bleibt Space
+normale Eingabe. Strg/Alt/Umschalt+Space werden nicht als Minimierbefehl behandelt.
+
+## Aufgeraeumte Ordner
+
+Im Stamm bleiben `Start-TaskPlopp.ps1`, `Setup.bat` und diese README. Die bisherigen
+Desktop-/Autostart-Verknuepfungen behalten damit ihr Startziel und das Icon.
+`src` enthaelt das Programm und Worker, `tools` die Einrichtung/Hilfsskripte,
+`tests` die Tests, `data` die Konfiguration. `assets`, `docs` und persoenliche
+`shortcuts` bleiben eigene Unterordner. Versteckte Git-Steuerdateien bleiben im Stamm.
+
+Beim ersten regulaeren Start wird eine alte Root-`config.json` bytegetreu nach
+`data\config.json` uebernommen, alte Sicherungen nach `data\backups`. Falls dort
+bereits eine Config besteht, bleibt sie aktiv; die alte Root-Datei wird unveraendert
+unter `data\legacy` aufbewahrt und ein Hinweis erscheint. Nichts wird zusammengefuehrt
+oder ueberschrieben. Bei einem Fehler bleiben die Dateien erhalten; soweit erforderlich
+wird der bisherige Configpfad weiter verwendet. Noch laufende Altinstanzen werden
+zuerst nur geweckt. Vor dem Update deshalb TaskPlopp auf den betroffenen PCs beenden.
+Modelle, importierte Links und benutzergebundene DPAPI-Keys bleiben unter LocalAppData.
+
+Zusaetzliche Tests: `tests\Test-TaskPloppAutosave.ps1`,
+`tests\Test-TaskPloppStructure.ps1` und `tests\Test-TaskPloppKeyboard.ps1`.
+Logitech-Sondertasten sind noch keine neue Produktfunktion; Stand der Discovery
+und Abnahme: `docs/Verifier_2026_11_08_Sofortspeichern_Ordner.md`.

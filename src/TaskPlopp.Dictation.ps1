@@ -260,7 +260,7 @@ function Start-TaskPloppDictationInstall {
     try {
         Initialize-TaskPloppDictation
         $script:DictationInstallError=''
-        $info=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'),('-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $PSScriptRoot 'Install-TaskPloppDictation.ps1')+'" -Root "'+$script:DictationRoot+'"'))
+        $info=[Diagnostics.ProcessStartInfo]::new((Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'),('-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $script:ProjectRoot 'tools\Install-TaskPloppDictation.ps1')+'" -Root "'+$script:DictationRoot+'"'))
         $script:DictationInstaller=New-TaskPloppProcess $info -Installer
         Set-TaskPloppMessage 'Notice' 'Diktat-Komponenten werden eingerichtet' 'Download, Entpacken und Pruefung laufen im Hintergrund.'
     } catch {$script:DictationInstallError=$_.Exception.Message;Set-TaskPloppMessage 'Error' 'Einrichtung konnte nicht gestartet werden' $_.Exception.Message}

@@ -9,8 +9,9 @@ Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 . (Join-Path $PSScriptRoot 'TaskPlopp.Native.ps1')
+. (Join-Path $PSScriptRoot 'TaskPlopp.Paths.ps1')
 
-$script:ConfigPath = if($ConfigFile) { [IO.Path]::GetFullPath($ConfigFile) } else { Join-Path $PSScriptRoot 'config.json' }
+$script:ConfigPath = if($ConfigFile) { [IO.Path]::GetFullPath($ConfigFile) } else { Join-Path $script:DataRoot 'config.json' }
 $script:CitrixProcesses = @('wfica32', 'CDViewer', 'Citrix.DesktopViewer.App', 'SelfService', 'Receiver', 'CitrixWorkspaceApp')
 
 function Get-Settings {
@@ -111,6 +112,8 @@ if (-not $created -and -not $SmokeTest) {
 }
 
 $script:StartupNotice=''
+$script:MigrationNotice=''
+if(-not$SmokeTest-and-not$ResidentTest-and-not$ConfigFile){$migration=Initialize-TaskPloppData;$script:ConfigPath=$migration.ConfigPath;$script:MigrationNotice=$migration.Notice}
 $uiExceptionHandler=[Threading.ThreadExceptionEventHandler]{param($sender,$eventArgs)
     try{Set-TaskPloppMessage Error 'Aktion konnte nicht abgeschlossen werden' $eventArgs.Exception.Message}
     catch{$script:StartupNotice=$eventArgs.Exception.Message}
@@ -121,7 +124,7 @@ try {
         $script:StartupNotice="Die Konfiguration konnte nicht gelesen werden. Sie bleibt erhalten. $($_.Exception.Message)"
         $script:Settings = ConvertTo-TaskPloppSettings ([pscustomobject]@{ ShowOpenWindows = $true; Programs = @() })
     }
-    $script:AppIcon = [Drawing.Icon]::new((Join-Path $PSScriptRoot 'assets\TaskPlopp.ico'))
+    $script:AppIcon = [Drawing.Icon]::new((Join-Path $script:ProjectRoot 'assets\TaskPlopp.ico'))
     $script:Main = New-Object Windows.Forms.Form
     Initialize-TaskPloppKeyboard $script:Main
     $script:Main.Icon = $script:AppIcon
@@ -424,7 +427,7 @@ try {
     $script:ListPanel.Add_SizeChanged({Update-TaskPloppContentLayout})
     $script:Main.Add_FontChanged({Update-TaskPloppContentLayout})
     if (-not $SmokeTest -and -not $ResidentTest) {
-        . (Join-Path $PSScriptRoot 'Start-TaskPlopp.ps1') -LibraryOnly
+        . (Join-Path $script:ProjectRoot 'Start-TaskPlopp.ps1') -LibraryOnly
         $script:Tray = New-Object Windows.Forms.NotifyIcon
         $script:Tray.Icon = $script:AppIcon
         $script:Tray.Text = 'TaskPlopp'
@@ -458,6 +461,7 @@ try {
     Update-WindowList
     Update-TaskPloppContentLayout
     if($script:StartupNotice){Set-TaskPloppMessage Error 'Start nicht vollstaendig' $script:StartupNotice}
+    elseif($script:MigrationNotice){Set-TaskPloppMessage Notice 'Ordnerstruktur: Hinweis' $script:MigrationNotice}
     $timer.Start()
     $dictationTimer=New-Object Windows.Forms.Timer
     $dictationTimer.Interval=100

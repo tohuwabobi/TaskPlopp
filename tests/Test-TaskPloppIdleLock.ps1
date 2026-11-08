@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Condition,[string]$Message) { if(-not $Condition) { throw $Message } }
 function Sample([int]$X=10,[bool]$Key=$false,[uint32]$Tick=1,[bool]$Available=$true) {
     [pscustomobject]@{Available=$Available;X=$X;Y=20;KeyDown=$Key;InputTick=$Tick}
@@ -55,7 +55,7 @@ try {
     Assert ($script:IdleState.Enabled -and $script:IdleState.LastSample -eq $null) 'Aktivieren nicht mit neuer Frist gestartet.'
     $script:Main.Dispose(); $script:LockButton.Dispose(); $script:ToolbarToolTip.Dispose()
     # New UI scope; test file is isolated and SmokeTest never starts a real lock timer.
-    & (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -SmokeTest -ConfigFile $global:TaskPloppIdleTestConfig -OnShown {
+    & (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $global:TaskPloppIdleTestConfig -OnShown {
         param($sender,$args)
         try {
             $toggle=$sender.Controls.Find('AutoLockToggle',$true)[0]
@@ -63,6 +63,7 @@ try {
             $toggle.PerformClick()
             $disk=Get-Settings -Path $global:TaskPloppIdleTestConfig
             Assert (-not $disk.AutoLockEnabled) 'Toolbar-Aus nicht gespeichert.'
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $enabled=$dialog.Controls.Find('AutoLockEnabled',$true)[0]
@@ -73,19 +74,20 @@ try {
                 $bitmap=[Drawing.Bitmap]::new($dialog.Width,$dialog.Height)
                 try { $dialog.DrawToBitmap($bitmap,[Drawing.Rectangle]::new(0,0,$dialog.Width,$dialog.Height)); $bitmap.Save((Join-Path $env:TEMP 'TaskPlopp-idle-config.png')) }
                 finally { $bitmap.Dispose() }
-                $dialog.Controls.Find('SaveSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             $disk=Get-Settings -Path $global:TaskPloppIdleTestConfig
             Assert ($disk.AutoLockEnabled -and $disk.AutoLockMinutes -eq 17) 'Konfiguration nicht gespeichert.'
             Assert ($toggle.AccessibleName -like '*aktiv:*17*') 'Toolbar nicht mit Konfiguration synchron.'
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $dialog.Controls.Find('AutoLockEnabled',$true)[0].Checked=$false
                 $dialog.Controls.Find('AutoLockMinutes',$true)[0].Value=5
-                $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             $disk=Get-Settings -Path $global:TaskPloppIdleTestConfig
-            Assert ($disk.AutoLockEnabled -and $disk.AutoLockMinutes -eq 17) 'Abbrechen hat Sperreinstellung veraendert.'
+            Assert (-not $disk.AutoLockEnabled -and $disk.AutoLockMinutes -eq 5) 'Sofortspeichern hat Sperreinstellung nicht uebernommen.'
             $sender.Size=[Drawing.Size]::new(420,350)
             [Windows.Forms.Application]::DoEvents()
             $toolbar=$sender.Controls.Find('Toolbar',$true)[0]
@@ -96,7 +98,7 @@ try {
             $sender.Hide(); [Windows.Forms.Application]::DoEvents()
             Assert $monitor.Enabled 'Ausblenden beendet die Ueberwachung.'
             $sender.Show()
-            [Console]::WriteLine('OK: Toolbar Ein/Aus, Minuten speichern, Abbrechen, gemeinsame Anzeige und kompakte Toolbar.')
+            [Console]::WriteLine('OK: Toolbar Ein/Aus, Minuten sofort speichern, gemeinsame Anzeige und kompakte Toolbar.')
         } catch { $global:TaskPloppIdleTestFailure=$_; [Console]::WriteLine($_.ToString()); $sender.Close() }
     }
     if($global:TaskPloppIdleTestFailure) { throw $global:TaskPloppIdleTestFailure }

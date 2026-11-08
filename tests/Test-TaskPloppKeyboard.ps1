@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-. (Join-Path $PSScriptRoot 'TaskPlopp.Keyboard.ps1')
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.Keyboard.ps1')
 function Assert([bool]$Condition,[string]$Message) { if (-not $Condition) { throw $Message } }
 $form = New-Object Windows.Forms.Form
 Initialize-TaskPloppKeyboard $form
@@ -72,6 +72,22 @@ try {
     Assert ($script:BackCount -eq 1) 'Zurueck-Ereignis fehlt.'
     $form.AudioView=$false
     Assert (-not $form.TrySelectKey([Windows.Forms.Keys]::Escape)) 'Taskansicht faengt Escape ungefragt ab.'
+    $script:SpaceMinimized=0
+    function Minimize-TaskPlopp {$script:SpaceMinimized++;$form.WindowState='Minimized'}
+    $replacement.Focus()|Out-Null;$script:ClickedIndex=-1
+    Assert ($form.TrySelectKey([Windows.Forms.Keys]::Space)) 'Space not handled on button focus'
+    Assert ($script:SpaceMinimized-eq1-and$script:ClickedIndex-eq-1-and$form.Visible-and$form.ShowInTaskbar-and$form.WindowState-eq'Minimized') 'Space fired button or hid taskbar window'
+    $form.WindowState='Normal';$form.Activate();[Windows.Forms.Application]::DoEvents()
+    Assert (-not$form.TrySelectKey([Windows.Forms.Keys]::Space-bor[Windows.Forms.Keys]::Shift)) 'Shift+Space intercepted'
+    $editor=[Windows.Forms.TextBox]::new();$form.Controls.Add($editor);$editor.Focus()|Out-Null
+    Assert (-not$form.TrySelectKey([Windows.Forms.Keys]::Space)) 'Space intercepted in text editor'
+    $editor.Dispose();$replacement.Focus()|Out-Null
+    $script:ConfigurationOpen=$true
+    Assert (-not$form.TrySelectKey([Windows.Forms.Keys]::Space)) 'Space intercepted while configuration open'
+    $script:ConfigurationOpen=$false;$form.AudioView=$true
+    Assert ($form.TrySelectKey([Windows.Forms.Keys]::Space)) 'Space not handled in Audio'
+    Assert ($script:SpaceMinimized-eq2) 'Wrong Space callback count'
+    $form.WindowState='Normal';$form.Activate();[Windows.Forms.Application]::DoEvents()
     $form.Hide()
     Assert (-not $form.TrySelectKey([Windows.Forms.Keys]::D1)) 'Tastenauswahl bei ausgeblendeter GUI aktiv.'
     Write-Output 'OK: 1-9, 0, A-Z, Ziffernblock, Shift, 36er-Grenze, Modifier-/Dialogschutz und Aktualisierung.'

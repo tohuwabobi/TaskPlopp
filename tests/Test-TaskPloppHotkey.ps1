@@ -1,6 +1,6 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Value,[string]$Message){if(-not $Value){throw $Message}}
 $script:Settings=ConvertTo-TaskPloppSettings ([pscustomobject]@{Programs=@();ShowOpenWindows=$false})
 Assert ($script:Settings.HotkeyModifiers -eq 3 -and $script:Settings.HotkeyKey -eq 'F10') 'Migration verliert Standard'
@@ -13,7 +13,7 @@ foreach($bad in @(@(0,'P'),@(16,'P'),@(3,'F12'),@(3,'Escape'),@(3,'p'))){
     $caught=$false;try{$null=ConvertTo-TaskPloppSettings $data}catch{$caught=$true}
     Assert $caught 'Ungueltige Kombination akzeptiert'
 }
-. (Join-Path $PSScriptRoot 'Start-TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\Start-TaskPlopp.ps1') -LibraryOnly
 $root=Join-Path $env:TEMP ('TaskPlopp-hotkey-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root | Out-Null
 $script:ConfigPath=Join-Path $root 'config.json'
@@ -66,9 +66,10 @@ $testConfig=Join-Path $env:TEMP ('TaskPlopp-hotkey-ui-'+[guid]::NewGuid().ToStri
 [IO.File]::WriteAllText($testConfig,'{"Programs":[],"ShowOpenWindows":false}',[Text.UTF8Encoding]::new($true))
 $global:HotkeyUiFailure=$null
 try {
-    . (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -SmokeTest -ConfigFile $testConfig -OnShown {
+    . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $testConfig -OnShown {
         param($sender,$args)
         try {
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $tab=$dialog.Controls.Find('HotkeyTab',$true)[0];$tab.Parent.SelectedTab=$tab
@@ -77,17 +78,18 @@ try {
                 Assert ($dialog.Controls.Find('HotkeyPreview',$true)[0].Text -eq 'Auswahl: Strg+Alt+Umschalt+P') 'Vorschau falsch'
                 $bmp=[Drawing.Bitmap]::new($dialog.Width,$dialog.Height)
                 try{$dialog.DrawToBitmap($bmp,[Drawing.Rectangle]::new(0,0,$dialog.Width,$dialog.Height));$bmp.Save((Join-Path $env:TEMP 'TaskPlopp-hotkey-config.png'))}finally{$bmp.Dispose()}
-                $dialog.Controls.Find('SaveSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             $saved=Get-Settings -Path $testConfig
             Assert ($saved.HotkeyKey -eq 'P' -and $saved.HotkeyModifiers -eq 7) 'UI-Auswahl nicht gespeichert'
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $dialog.Controls.Find('HotkeyKey',$true)[0].SelectedItem='F9'
-                $dialog.Controls.Find('CancelSettings',$true)[0].PerformClick()
+                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
-            Assert ((Get-Settings -Path $testConfig).HotkeyKey -eq 'P') 'Abbrechen hat Hotkey geaendert'
-            'OK: Konfiguration/Vorschau/Speichern/Abbrechen mit isolierter Datei; keine produktive Hotkey-Aenderung.' | Write-Host
+            Assert ((Get-Settings -Path $testConfig).HotkeyKey -eq 'F9') 'Sofortspeichern hat Hotkey nicht geaendert'
+            'OK: Konfiguration/Vorschau/Sofortspeichern mit isolierter Datei; keine produktive Hotkey-Aenderung.' | Write-Host
         } catch{$global:HotkeyUiFailure=$_;Write-Host $_.ToString()}
     }
     if($global:HotkeyUiFailure){throw $global:HotkeyUiFailure}

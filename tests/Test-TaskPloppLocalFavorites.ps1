@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param([switch]$OpenFolders)
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 $settings=Get-Settings
 $expected=@('Chrome - hspwo.de','Chrome - Mein Chrome','Downloads','Desktop')
 for($index=0;$index -lt 4;$index++) {

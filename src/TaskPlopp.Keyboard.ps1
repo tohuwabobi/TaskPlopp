@@ -22,6 +22,16 @@ function Test-TaskPloppOpenMenu($Control) {
 function Invoke-TaskPloppSelection($Form,[Windows.Forms.Keys]$KeyData) {
     if(-not$Form.Visible-or-not$Form.Enabled-or[Windows.Forms.Form]::ActiveForm-ne$Form){return $false}
     if(($KeyData-band([Windows.Forms.Keys]::Control-bor[Windows.Forms.Keys]::Alt))-ne0-or(Test-TaskPloppOpenMenu $Form)){return $false}
+    if($KeyData-eq[Windows.Forms.Keys]::Space){
+        if((Get-Variable ConfigurationOpen -Scope Script -ValueOnly -ErrorAction SilentlyContinue)-eq$true){return $false}
+        $control=$Form.ActiveControl
+        while($null-ne$control){
+            if($control-is[Windows.Forms.TextBoxBase]-or$control-is[Windows.Forms.ListControl]-or$control-is[Windows.Forms.UpDownBase]-or($control-is[Windows.Forms.DataGridView]-and$control.IsCurrentCellInEditMode)){return $false}
+            if($control-is[Windows.Forms.ContainerControl]){$control=$control.ActiveControl}else{break}
+        }
+        Minimize-TaskPlopp
+        return $true
+    }
     if($KeyData-eq[Windows.Forms.Keys]::Escape-and$Form.AudioView){Show-TaskPloppView 'Tasks';return $true}
     $code=[int]($KeyData-band[Windows.Forms.Keys]::KeyCode)
     $key=if($code-ge48-and$code-le57){[char]$code}elseif($code-ge96-and$code-le105){[char]($code-48)}elseif($code-ge65-and$code-le90){[char]$code}else{return $false}

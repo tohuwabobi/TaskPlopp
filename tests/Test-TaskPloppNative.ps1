@@ -1,19 +1,19 @@
 ﻿#requires -Version 5.1
 param([switch]$Microphone)
 $ErrorActionPreference='Stop'
-. (Join-Path $PSScriptRoot 'TaskPlopp.ps1') -LibraryOnly
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Value,[string]$Message){if(-not$Value){throw $Message}}
 # Source audit includes tests and fixtures, not just application modules.
-foreach($file in Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1'){
+foreach($file in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..') -Filter '*.ps1' -Recurse){
     $tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)
     Assert ($errors.Count-eq0) ('Syntaxfehler: '+$file.Name)
     $commands=$ast.FindAll({param($node)$node-is[Management.Automation.Language.CommandAst]-and$node.GetCommandName()-eq'Add-Type'},$true)
     foreach($command in $commands){$parameters=@($command.CommandElements|Where-Object{$_-is[Management.Automation.Language.CommandParameterAst]}|ForEach-Object ParameterName);Assert ($parameters-contains'AssemblyName'-and@($parameters|Where-Object{$_-in@('TypeDefinition','MemberDefinition','Path','OutputAssembly')}).Count-eq0) ('Compilerquelle: '+$file.Name)}
 }
-Assert (@(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.cs' -Recurse).Count-eq0) 'C#-Dateien uebrig'
+Assert (@(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..') -Filter '*.cs' -Recurse).Count-eq0) 'C#-Dateien uebrig'
 Assert ($null-eq('TaskPlopp.Native'-as[type])-and$null-eq('TaskPlopp.Dictation.Job'-as[type])) 'Alte Hilfstypen geladen'
 $assemblies=[AppDomain]::CurrentDomain.GetAssemblies().Count
-. (Join-Path $PSScriptRoot 'TaskPlopp.Native.ps1')
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.Native.ps1')
 Assert ([AppDomain]::CurrentDomain.GetAssemblies().Count-eq$assemblies) 'Native Metadaten werden wiederholt erzeugt'
 $first=[Windows.Forms.Form]::new();$second=[Windows.Forms.Form]::new()
 try{
