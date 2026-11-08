@@ -16,10 +16,10 @@ function ConvertTo-TaskPloppSettings($Data) {
     if(($Data.HotkeyModifiers -isnot [int] -and $Data.HotkeyModifiers -isnot [long]) -or $Data.HotkeyModifiers -lt 0 -or $Data.HotkeyModifiers -gt 15) {
         throw 'Tastenkombination: Ungueltige Zusatztasten.'
     }
-    if($Data.HotkeyKey -isnot [string] -or $Data.HotkeyKey -cnotmatch '^(?:[A-Z]|[0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Taschenrechner)$' -or $Data.HotkeyKey -eq 'F12') {
+    if($Data.HotkeyKey -isnot [string] -or $Data.HotkeyKey -cnotmatch '^(?:[A-Z]|[0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Taschenrechner|NumPad[0-9]|Back|Tab|Return|Space|PageUp|PageDown|End|Home|Left|Up|Right|Down|Insert|Delete|Browser(?:Back|Forward|Refresh|Stop|Search|Favorites|Home)|Volume(?:Mute|Down|Up)|Media(?:NextTrack|PreviousTrack|Stop|PlayPause)|LaunchMail|SelectMedia|LaunchApplication[12])$' -or $Data.HotkeyKey -eq 'F12') {
         throw 'Tastenkombination: A-Z, 0-9, F1-F24 oder Taschenrechner waehlen (F12 ist fuer Windows reserviert).'
     }
-    if($Data.HotkeyModifiers -eq 0 -and $Data.HotkeyKey -ne 'Taschenrechner'){throw 'Tastenkombination: Mindestens eine Zusatztaste waehlen; nur Taschenrechner darf alleine verwendet werden.'}
+    if($Data.HotkeyModifiers -eq 0 -and $Data.HotkeyKey -cnotmatch '^(?:Taschenrechner|Browser.+|Volume.+|Media.+|LaunchMail|SelectMedia|LaunchApplication[12])$'){throw 'Tastenkombination: Mindestens eine Zusatztaste waehlen; Sondertasten duerfen alleine verwendet werden.'}
     if($Data.PSObject.Properties.Name -notcontains 'DictationEngine') {
         $Data | Add-Member -NotePropertyName DictationEngine -NotePropertyValue 'Whisper'
     }

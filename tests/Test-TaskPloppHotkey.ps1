@@ -77,38 +77,53 @@ try {
 $testConfig=Join-Path $env:TEMP ('TaskPlopp-hotkey-ui-'+[guid]::NewGuid().ToString('N')+'.json')
 [IO.File]::WriteAllText($testConfig,'{"Programs":[],"ShowOpenWindows":false}',[Text.UTF8Encoding]::new($true))
 $global:HotkeyUiFailure=$null
+function Press-CaptureKey($Dialog,[Windows.Forms.Keys]$Keys){
+    $input=$Dialog.Controls.Find('HotkeyCapture',$true)[0]
+    $event=[Windows.Forms.KeyEventArgs]::new($Keys)
+    [Windows.Forms.Control].GetMethod('OnKeyDown',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($input,[object[]]@($event))|Out-Null
+}
 try {
     . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -SmokeTest -ConfigFile $testConfig -OnShown {
         param($sender,$args)
         try {
             function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
+            $script:CaptureTestKeys=@()
+            function Get-TaskPloppPressedCaptureKeys {$script:CaptureTestKeys}
+            function Get-TaskPloppPressedModifiers {0}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
                 $tab=$dialog.Controls.Find('HotkeyTab',$true)[0];$tab.Parent.SelectedTab=$tab
-                $dialog.Controls.Find('HotkeyModifier4',$true)[0].Checked=$true
-                $dialog.Controls.Find('HotkeyKey',$true)[0].SelectedItem='P'
-                Assert ($dialog.Controls.Find('HotkeyPreview',$true)[0].Text -eq 'Auswahl: Strg+Alt+Umschalt+P') 'Vorschau falsch'
-                $bmp=[Drawing.Bitmap]::new($dialog.Width,$dialog.Height)
-                try{$dialog.DrawToBitmap($bmp,[Drawing.Rectangle]::new(0,0,$dialog.Width,$dialog.Height));$bmp.Save((Join-Path $env:TEMP 'TaskPlopp-hotkey-config.png'))}finally{$bmp.Dispose()}
+                Assert ($dialog.Controls.Find('HotkeyKey',$true).Count-eq0) 'Old key dropdown retained'
+                $button=$dialog.Controls.Find('CaptureHotkey',$true)[0]
+                $button.PerformClick()
+                Press-CaptureKey $dialog ([Windows.Forms.Keys]::ControlKey)
+                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'F10') 'Modifier alone saved'
+                Press-CaptureKey $dialog ([Windows.Forms.Keys]::Control-bor[Windows.Forms.Keys]::Alt-bor[Windows.Forms.Keys]::Shift-bor[Windows.Forms.Keys]::P)
+                Assert ($dialog.Controls.Find('HotkeyPreview',$true)[0].Text-eq'Aktuell: Strg+Alt+Umschalt+P') 'Recorded preview wrong'
+                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'P') 'Recorded combination not autosaved'
+                $button.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::Escape)
+                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'P') 'Escape changed settings'
+                $button.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::LaunchApplication2)
+                Assert ((Get-Settings -Path $testConfig).HotkeyModifiers-eq0-and(Get-Settings -Path $testConfig).HotkeyKey-eq'Taschenrechner') 'Calculator capture without modifiers failed'
+                $button.PerformClick();$script:CaptureTestKeys=@(180)
+                [Windows.Forms.Form].GetMethod('OnDeactivate',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($dialog,[object[]]@([EventArgs]::Empty))|Out-Null
+                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'LaunchMail') 'Special key polling on deactivation not saved'
+                $script:CaptureTestKeys=@()
+                $button.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::LaunchApplication2)
+                $button.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::P)
+                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'Taschenrechner') 'Plain letter replaced hotkey'
+                $button.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::F12-bor[Windows.Forms.Keys]::Control)
+                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'Taschenrechner') 'Reserved F12 replaced hotkey'
+                $button.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::Control-bor[Windows.Forms.Keys]::F9)
+                $button.PerformClick();$button.PerformClick()
+                Assert ($dialog.Controls.Find('HotkeyCapture',$true)[0].Text-like'*abgebrochen*') 'Cancel button restarts capture'
+                $button.PerformClick();$tab.Parent.SelectedIndex=0
+                Assert ($button.Text-eq'Tastenkombination aufnehmen') 'Tab change retains capture'
                 $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
-            $saved=Get-Settings -Path $testConfig
-            Assert ($saved.HotkeyKey -eq 'P' -and $saved.HotkeyModifiers -eq 7) 'UI-Auswahl nicht gespeichert'
-            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
-            Show-TaskPloppConfiguration -OnShown {
-                param($dialog,$args)
-                $keys=$dialog.Controls.Find('HotkeyKey',$true)[0]
-                Assert ($keys.Items.Contains('Taschenrechner')) 'Calculator missing from selection'
-                $keys.SelectedItem='Taschenrechner'
-                foreach($bit in @(2,1,4,8)){$dialog.Controls.Find(('HotkeyModifier'+$bit),$true)[0].Checked=$false}
-                Assert ((Get-Settings -Path $testConfig).HotkeyModifiers-eq0-and$dialog.Controls.Find('HotkeyPreview',$true)[0].Text-eq'Auswahl: Taschenrechner') 'Calculator alone not autosaved/previewed'
-                $dialog.Controls.Find('HotkeyModifier2',$true)[0].Checked=$true
-                $keys.SelectedItem='F9'
-                $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
-            }
-            Assert ((Get-Settings -Path $testConfig).HotkeyKey -eq 'F9') 'Sofortspeichern hat Hotkey nicht geaendert'
-            'OK: Konfiguration/Vorschau/Sofortspeichern mit isolierter Datei; keine produktive Hotkey-Aenderung.' | Write-Host
-        } catch{$global:HotkeyUiFailure=$_;Write-Host $_.ToString()}
+            Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'F9') 'Capture close lost settings'
+            Write-Host 'OK: Press-to-record UI, modifiers ignored alone, immediate save, calculator, invalid/F12 preserve old key, Escape/button/tab cancel.'
+        }catch{$global:HotkeyUiFailure=$_;Write-Host $_.ToString()}
     }
     if($global:HotkeyUiFailure){throw $global:HotkeyUiFailure}
-} finally {if(Test-Path $testConfig){Remove-Item -LiteralPath $testConfig}}
+}finally{if(Test-Path $testConfig){Remove-Item -LiteralPath $testConfig}}

@@ -41,11 +41,13 @@ Der Hotkey wird ueber die Windows-API RegisterHotKey registriert; die Verknuepfu
 selbst hat keine Tastenkombination mehr. Falls die Kombination bereits belegt ist,
 erscheint der Hinweis in der Statusleiste; die GUI bleibt ueber das Symbol erreichbar.
 
-Unter **Konfiguration > Tastenkombination** lassen sich Strg, Alt, Umschalt und Win
-mit A-Z, 0-9 oder einer Funktionstaste kombinieren. Mindestens eine Zusatztaste ist
-erforderlich; F12 bleibt entsprechend der Windows-Vorgabe ausgespart. Die Vorschau
-zeigt die Auswahl. Jede Aenderung registriert die neue Kombination sofort, ohne
-Neustart. Bei Belegung oder Speicherfehler bleiben die alte Kombination und die
+Unter **Konfiguration > Tastenkombination** auf **Tastenkombination aufnehmen**
+klicken und die gewuenschte Kombination druecken. TaskPlopp erkennt, prueft und
+speichert sie sofort. Escape, erneuter Buttonklick, Tabwechsel oder Fokusverlust
+brechen die Aufnahme ab. Strg/Alt/Umschalt/Win alleine speichern nichts.
+Buchstaben, Ziffern, Ziffernblock, Funktions- und Navigationstasten brauchen eine
+Zusatztaste; Browser-/Medien-/Starttasten wie Taschenrechner duerfen alleine stehen.
+F12 bleibt reserviert. Die neue Kombination gilt sofort, ohne Neustart. Bei Belegung oder Speicherfehler bleiben die alte Kombination und die
 gespeicherten Einstellungen erhalten; die Anzeige kehrt zum bisherigen Wert zurueck. Dieselbe
 gespeicherte Kombination wird beim naechsten Programmstart wieder registriert und
 im Infobereich angezeigt. Die Desktop-Verknuepfung selbst braucht keine Aenderung.
@@ -547,8 +549,8 @@ Modelle, importierte Links und benutzergebundene DPAPI-Keys bleiben unter LocalA
 
 Zusaetzliche Tests: `tests\Test-TaskPloppAutosave.ps1`,
 `tests\Test-TaskPloppStructure.ps1` und `tests\Test-TaskPloppKeyboard.ps1`.
-Logitech-Sondertasten sind noch keine neue Produktfunktion; Stand der Discovery
-und Abnahme: `docs/Verifier_2026_11_08_Sofortspeichern_Ordner.md`.
+Fruehere Sondertasten-Discovery: `docs/Verifier_2026_11_08_Sofortspeichern_Ordner.md`.
+Die aktuelle Tastenaufnahme steht in `docs/Verifier_2026_11_08_Hotkey_Aufnahme.md`.
 Beim Bearbeiten eines Textfeldes zeigt die Statusleiste gelb **noch nicht gespeichert**.
 Nach der Uebernahme wird sie fuer zwei Sekunden gruen und nennt den Speicherzeitpunkt;
 danach verwendet sie wieder den normalen GUI-Hintergrund. Eine neue Eingabe ersetzt
@@ -560,9 +562,9 @@ werden durch diese kurze Speicherbestaetigung nicht automatisch beendet.
 Ergebnisse und Fehler des Fensterordners verschwinden nach 15 Sekunden. Der runde
 Aktualisieren-Button entfernt bisherige Meldungen sofort. Laufende Aufnahme,
 Transkription, Einrichtung und Fensterplanung/-anordnung werden dabei nicht ausgeblendet.
-Unter Zahnrad > Tastenkombination ist auch Taschenrechner waehlbar. Zuerst diesen
-Eintrag waehlen, dann bei Bedarf Strg/Alt/Umschalt/Win abwaehlen. Die Sondertaste darf
-alleine verwendet werden; normale Buchstaben/F-Tasten benoetigen weiterhin Zusatztasten.
+Unter Zahnrad > Tastenkombination auf **Tastenkombination aufnehmen** klicken und
+beispielsweise die Taschenrechner-Taste druecken. Auswahlliste und Modifier-Haekchen
+entfallen. Sondertasten duerfen alleine stehen; Buchstaben/F-Tasten brauchen Zusatztasten.
 Die bisherige Belegung bleibt erhalten, bis du selbst etwas aenderst. Falls Logitech
 die Sondertaste anders belegt, diese Belegung dort pruefen. Echten Tastendruck auch
 im Citrix-Vollbild testen; erfolgreiche Windows-Registrierung allein belegt das nicht.

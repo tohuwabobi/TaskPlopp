@@ -163,33 +163,18 @@ function Show-TaskPloppConfiguration {
     $hotkeyLayout.Padding=[Windows.Forms.Padding]::new(16)
     $hotkeyLabel=New-Object Windows.Forms.Label
     $hotkeyLabel.Text='TaskPlopp global oeffnen:';$hotkeyLabel.AutoSize=$true
-    $hotkeyModifiers=New-Object Windows.Forms.FlowLayoutPanel
-    $hotkeyModifiers.AutoSize=$true;$hotkeyModifiers.WrapContents=$false
-    $hotkeyChecks=@()
-    foreach($item in @(@('Strg',2),@('Alt',1),@('Umschalt',4),@('Win',8))){
-        $check=New-Object Windows.Forms.CheckBox
-        $check.Name='HotkeyModifier'+$item[1];$check.Text=$item[0];$check.Tag=[int]$item[1];$check.AutoSize=$true
-        $check.Checked=($working.HotkeyModifiers -band $check.Tag) -ne 0
-        $hotkeyChecks+=$check;[void]$hotkeyModifiers.Controls.Add($check)
-    }
-    $hotkeyKey=New-Object Windows.Forms.ComboBox
-    $hotkeyKey.Name='HotkeyKey';$hotkeyKey.DropDownStyle='DropDownList';$hotkeyKey.Width=230
-    $keys=@(1..24 | Where-Object {$_ -ne 12} | ForEach-Object {"F$_"})+@(65..90 | ForEach-Object {[string][char]$_})+@(0..9 | ForEach-Object {[string]$_})
-    $keys+=@('Taschenrechner')
-    $hotkeyKey.Items.AddRange([object[]]$keys);$hotkeyKey.SelectedItem=$working.HotkeyKey
     $hotkeyPreview=New-Object Windows.Forms.Label
     $hotkeyPreview.Name='HotkeyPreview';$hotkeyPreview.AutoSize=$true
-    $updateHotkeyPreview={
-        $bits=0;foreach($check in $hotkeyChecks){if($check.Checked){$bits=$bits -bor [int]$check.Tag}}
-        $hotkeyPreview.Text=if($bits-or$hotkeyKey.SelectedItem-eq'Taschenrechner'){'Auswahl: '+(Get-TaskPloppHotkeySpec ([pscustomobject]@{HotkeyModifiers=$bits;HotkeyKey=[string]$hotkeyKey.SelectedItem})).Label}else{'Bitte mindestens eine Zusatztaste waehlen.'}
-    }
-    foreach($check in $hotkeyChecks){$check.Add_CheckedChanged($updateHotkeyPreview)}
-    $hotkeyKey.Add_SelectedIndexChanged($updateHotkeyPreview)
-    & $updateHotkeyPreview
+    $hotkeyPreview.Text='Aktuell: '+(Get-TaskPloppHotkeySpec $working).Label
+    $captureButton=[Windows.Forms.Button]::new();$captureButton.Name='CaptureHotkey';$captureButton.Text='Tastenkombination aufnehmen';$captureButton.AutoSize=$true
+    $captureInput=[Windows.Forms.TextBox]::new();$captureInput.Name='HotkeyCapture';$captureInput.ReadOnly=$true;$captureInput.ShortcutsEnabled=$false;$captureInput.Width=600
+    $captureInput.Text='Zum Aendern auf Tastenkombination aufnehmen klicken.'
+    $captureTimer=[Windows.Forms.Timer]::new();$captureTimer.Interval=25
+    $captureState=@{Active=$false;Down=@()}
     $hotkeyHelp=New-Object Windows.Forms.Label
     $hotkeyHelp.AutoSize=$true;$hotkeyHelp.MaximumSize=[Drawing.Size]::new(700,0)
-    $hotkeyHelp.Text="Jede Auswahl prueft und aktiviert die Kombination sofort.`r`nIst sie belegt, bleiben bisherige Kombination und Einstellungen erhalten.`r`nStandard: Strg+Alt+F10. F12 ist fuer Windows reserviert.`r`nTaschenrechner kann auch ohne Zusatztasten verwendet werden.`r`nFalls die Taste weiter den Rechner startet: Logitech-Belegung pruefen.`r`nCitrix kann Tastenkombinationen an die entfernte Sitzung weiterreichen.`r`nBitte die gewaehlte Kombination auch im Citrix-Vollbild testen."
-    $hotkeyLayout.Controls.AddRange(@($hotkeyLabel,$hotkeyModifiers,$hotkeyKey,$hotkeyPreview,$hotkeyHelp))
+    $hotkeyHelp.Text="Gewuenschte Kombination druecken; sie wird sofort geprueft und gespeichert.`r`nEscape bricht ab. Bei belegter Kombination bleibt die bisherige erhalten.`r`nSondertasten wie Taschenrechner sind auch ohne Strg/Alt moeglich.`r`nLogitech-Belegung und Citrix koennen Tasten abfangen. Bitte dort ebenfalls testen."
+    $hotkeyLayout.Controls.AddRange(@($hotkeyLabel,$hotkeyPreview,$captureButton,$captureInput,$hotkeyHelp))
     $hotkeyTab.Controls.Add($hotkeyLayout);[void]$tabs.TabPages.Add($hotkeyTab)
 
     $favoriteList = New-Object Windows.Forms.ListBox
@@ -298,8 +283,7 @@ function Show-TaskPloppConfiguration {
             $lockEnabled.Checked=$script:Settings.AutoLockEnabled;$lockMinutes.Value=$script:Settings.AutoLockMinutes
             $show.Checked=$script:Settings.ShowOpenWindows;$layoutModel.Text=$script:Settings.WindowLayoutModel
             $dictationChoice.SelectedIndex=if($script:Settings.DictationEngine-eq'Vosk'){1}else{0}
-            foreach($check in $hotkeyChecks){$check.Checked=($script:Settings.HotkeyModifiers-band[int]$check.Tag)-ne0}
-            $hotkeyKey.SelectedItem=$script:Settings.HotkeyKey
+            $hotkeyPreview.Text='Aktuell: '+(Get-TaskPloppHotkeySpec $script:Settings).Label
             $selection=[Math]::Min($selection,$favoriteList.Items.Count-1)
             & $loadFavorite $selection
         }finally{$configState.Loading=$false}
@@ -400,14 +384,57 @@ function Show-TaskPloppConfiguration {
     $lockEnabled.Add_CheckedChanged({$value=$lockEnabled.Checked;& $commit {param($c)$c.AutoLockEnabled=$value}})
     $lockMinutes.Add_ValueChanged({$value=[int]$lockMinutes.Value;& $commit {param($c)$c.AutoLockMinutes=$value}})
     $dictationChoice.Add_SelectedIndexChanged({$value=if($dictationChoice.SelectedIndex-eq1){'Vosk'}else{'Whisper'};& $commit {param($c)$c.DictationEngine=$value}})
-    $hotkeyChanged={
-        if($configState.Loading){return}
-        $bits=0;foreach($check in $hotkeyChecks){if($check.Checked){$bits=$bits-bor[int]$check.Tag}}
-        $value=[string]$hotkeyKey.SelectedItem;& $commit {param($c)$c.HotkeyModifiers=$bits;$c.HotkeyKey=$value}
+    $stopCapture={
+        $captureState.Active=$false;$captureTimer.Stop();$captureButton.Text='Tastenkombination aufnehmen'
     }
-    foreach($check in $hotkeyChecks){$check.Add_CheckedChanged($hotkeyChanged)}
-    $hotkeyKey.Add_SelectedIndexChanged($hotkeyChanged)
+    $acceptCapture={
+        param([int]$code,[int]$bits)
+        if(-not$captureState.Active){return}
+        if($code-eq27){& $stopCapture;$captureInput.Text='Aufnahme abgebrochen. Bisherige Kombination bleibt erhalten.';return}
+        try{
+            $captured=ConvertFrom-TaskPloppHotkeyPress $code $bits
+            if($null-eq$captured){return}
+            & $stopCapture
+            $value=$captured.HotkeyKey
+            & $commit {param($c)$c.HotkeyModifiers=$bits;$c.HotkeyKey=$value}
+            $captureInput.Text=if($configState.LastError){'Nicht gespeichert. Bisherige Kombination bleibt erhalten.'}else{'Aktiv: '+(Get-TaskPloppHotkeySpec $script:Settings).Label}
+        }catch{
+            & $stopCapture;$captureInput.Text='Nicht gespeichert. Erneut aufnehmen, um es noch einmal zu versuchen.'
+            Set-TaskPloppMessage Error 'Tastenkombination nicht uebernommen' $_.Exception.Message
+        }
+    }
+    $pollCapture={
+        if(-not$captureState.Active){return}
+        $down=@(Get-TaskPloppPressedCaptureKeys)
+        $fresh=@($down|Where-Object {$_-notin$captureState.Down})
+        $captureState.Down=$down
+        if($fresh.Count){& $acceptCapture $fresh[0] (Get-TaskPloppPressedModifiers)}
+    }
+    $captureButton.Add_Click({
+        if($captureState.Active){& $stopCapture;$captureInput.Text='Aufnahme abgebrochen.';return}
+        $captureState.Down=@(Get-TaskPloppPressedCaptureKeys);$captureState.Active=$true
+        $captureInput.Text='Druecke jetzt die gewuenschte Tastenkombination. Escape bricht ab.'
+        $captureButton.Text='Aufnahme abbrechen';$captureInput.Focus();$captureTimer.Start()
+    })
+    $captureInput.Add_PreviewKeyDown({param($sender,$e) if($captureState.Active){$e.IsInputKey=$true}})
+    $captureInput.Add_KeyDown({
+        param($sender,$e)
+        if(-not$captureState.Active){return}
+        $e.SuppressKeyPress=$true;$e.Handled=$true
+        $bits=Get-TaskPloppPressedModifiers
+        if($e.Control){$bits=$bits-bor2};if($e.Alt){$bits=$bits-bor1};if($e.Shift){$bits=$bits-bor4}
+        & $acceptCapture ([int]$e.KeyCode) $bits
+    })
+    $captureTimer.Add_Tick($pollCapture)
+    $captureInput.Add_Leave({
+        if($captureButton.Focused){return}
+        if($captureState.Active){& $pollCapture}
+        if($captureState.Active){& $stopCapture;$captureInput.Text='Aufnahme abgebrochen. Zum Aufnehmen erneut klicken.'}
+    })
+    $dialog.Add_Deactivate({if($captureState.Active){& $pollCapture};if($captureState.Active){& $stopCapture;$captureInput.Text='Aufnahme abgebrochen. TaskPlopp hat den Fokus verloren.'}})
+    $tabs.Add_SelectedIndexChanged({if($captureState.Active){& $stopCapture;$captureInput.Text='Aufnahme abgebrochen.'}})
     $dialog.Add_FormClosing({
+        & $stopCapture
         & $commitFavorite
         $value=$layoutModel.Text.Trim();& $commit {param($c)$c.WindowLayoutModel=$value}
         & $commitKey
@@ -420,7 +447,7 @@ function Show-TaskPloppConfiguration {
     $fit=[Drawing.Size]::new([Math]::Min($dialog.Width,$area.Width-40),[Math]::Min($dialog.Height,$area.Height-40))
     $dialog.MinimumSize=$fit;$dialog.Size=$fit
     $script:ConfigurationOpen=$true
-    try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$keyInput.Clear();$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
+    try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$keyInput.Clear();$captureTimer.Dispose();$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
     Show-TaskPloppView
     if($configState.LastError){Set-TaskPloppMessage Error 'Aenderung nicht uebernommen' $configState.LastError}
 }

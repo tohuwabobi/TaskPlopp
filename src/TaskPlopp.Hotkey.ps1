@@ -10,6 +10,24 @@ function Get-TaskPloppHotkeySpec($Settings) {
     $names+=$Settings.HotkeyKey
     [pscustomobject]@{Modifiers=[uint32]($Settings.HotkeyModifiers -bor 0x4000);Key=[uint32][Windows.Forms.Keys]::$keyName;Label=$names -join '+'}
 }
+function Get-TaskPloppCaptureKeys {
+    @(27)+@(48..57)+@(65..90)+@(96..105)+@(112..135)+@(166..183)+@(8,9,13,32,33,34,35,36,37,38,39,40,45,46)
+}
+function ConvertFrom-TaskPloppHotkeyPress([int]$Key,[int]$Modifiers) {
+    if($Key-in@(16,17,18,91,92,160,161,162,163,164,165)){return $null}
+    if($Key-notin(Get-TaskPloppCaptureKeys)-or$Key-in@(27,123)){throw 'Diese Taste ist nicht als Hotkey verfuegbar. Escape bricht ab; F12 ist reserviert.'}
+    $navigation=@{8='Back';9='Tab';13='Return';32='Space';33='PageUp';34='PageDown';35='End';36='Home';37='Left';38='Up';39='Right';40='Down';45='Insert';46='Delete'}
+    $name=if($navigation.ContainsKey($Key)){$navigation[$Key]}elseif($Key-eq183){'Taschenrechner'}elseif($Key-ge48-and$Key-le57){[string]($Key-48)}else{([Windows.Forms.Keys]$Key).ToString()}
+    ConvertTo-TaskPloppSettings ([pscustomobject]@{Programs=@();HotkeyModifiers=$Modifiers;HotkeyKey=$name})
+}
+function Get-TaskPloppPressedCaptureKeys {
+    @(Get-TaskPloppCaptureKeys|Where-Object {[TaskPloppInterop.User]::GetAsyncKeyState($_)-band0x8000})
+}
+function Get-TaskPloppPressedModifiers {
+    $bits=0
+    foreach($pair in @(@(17,2),@(18,1),@(16,4),@(91,8),@(92,8))){if([TaskPloppInterop.User]::GetAsyncKeyState($pair[0])-band0x8000){$bits=$bits-bor$pair[1]}}
+    $bits
+}
 function New-TaskPloppHotkeyListener($Spec) {
     $wake=Get-Variable WakeEvent -Scope Script -ValueOnly -ErrorAction SilentlyContinue
     $state=[hashtable]::Synchronized(@{ThreadId=[uint32]0;Registered=$false;Cleaned=$false;Error='';Wake=$wake})
