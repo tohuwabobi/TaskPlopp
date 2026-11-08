@@ -126,6 +126,7 @@ try {
     Initialize-TaskPloppKeyboard $script:Main
     $script:Main.Icon = $script:AppIcon
     $script:Main.Text = 'TaskPlopp'
+    $script:Main.ShowInTaskbar = $true
     $workArea = [Windows.Forms.Screen]::FromPoint([Windows.Forms.Cursor]::Position).WorkingArea
     $script:Main.Size = [Drawing.Size]::new([Math]::Min(760, $workArea.Width - 80), [Math]::Min(1200, $workArea.Height - 80))
     $script:Main.MinimumSize = [Drawing.Size]::new(460, 350)
@@ -146,6 +147,12 @@ try {
             $script:Main.Hide()
         }
     })
+
+    function Minimize-TaskPlopp {
+        $script:Main.ShowInTaskbar=$true
+        if(-not$script:Main.Visible){$script:Main.Show()}
+        $script:Main.WindowState=[Windows.Forms.FormWindowState]::Minimized
+    }
 
     function Show-TaskPlopp {
         if($script:LayoutCapturing){return}
@@ -220,7 +227,7 @@ try {
             } | ForEach-Object { $_.Handle })
         }
         if ((Activate-TaskPloppCoveredWindow $Window.Handle $covers)) {
-            $script:Main.Hide()
+            Minimize-TaskPlopp
         } else {
             Set-TaskPloppMessage Error 'Fenster konnte nicht aktiviert werden' 'Eventuell blockiert ein erhoehtes Programm den Wechsel. Bitte aktualisieren und erneut versuchen.'
         }
@@ -241,7 +248,7 @@ try {
             if (-not (Minimize-TaskPloppWindow $citrix.Handle)) { throw 'Citrix konnte nicht minimiert werden.' }
         }
         Start-FavoriteApplication $Favorite
-        $script:Main.Hide()
+        Minimize-TaskPlopp
     }
 
     function Add-WindowButton([string]$Text, $Target, [switch]$Favorite, [object[]]$MatchingWindows = @()) {
@@ -343,7 +350,7 @@ try {
         $citrix = @(Get-AppWindows -Raw | Where-Object { $_.ProcessName -in $script:CitrixProcesses })
         if ($citrix.Count -eq 0) { Set-TaskPloppMessage Notice 'Kein sichtbares Citrix-Fenster gefunden' ''; return }
         foreach ($window in $citrix) { $null=Minimize-TaskPloppWindow $window.Handle }
-        $script:Main.Close()
+        Minimize-TaskPlopp
     } -Hint 'Citrix-Fenster minimieren'
     $toolbarLeft.Controls[0].Name='CitrixButton'
     $script:AudioButton = Add-ToolbarButton 'Audio' {

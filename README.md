@@ -1,7 +1,8 @@
 ﻿# TaskPlopp
 
 Kleiner lokaler Fensterumschalter fuer Windows PowerShell 5.1 mit Windows Forms.
-Eigener Programm-, Installer- und Testcode besteht ausschliesslich aus PowerShell.
+Eigener Programm-, Installer- und Testcode besteht aus PowerShell;
+`Setup.bat` dient als Einstieg per Doppelklick.
 Es wird kein C#-Quelltext kompiliert und keine eigene Hilfs-DLL erzeugt. Die kleine
 Datei `TaskPlopp.Native.ps1` deklariert benoetigte Windows-/COM-Schnittstellen ueber
 .NET-Laufzeitmetadaten. Windows Forms, Windows-APIs und die nativen Whisper-/Vosk-
@@ -10,6 +11,14 @@ Keine Zusatzmodule, kein Administrator und kein Autostart. Ein kleiner lokaler P
 
 ## Starten
 
+**Einfach einrichten:** `Setup.bat` im TaskPlopp-Ordner doppelt anklicken.
+Sie erstellt oder aktualisiert die Desktop-Verknuepfung. Anschliessend
+**TaskPlopp** auf dem Desktop doppelt anklicken. Administratorrechte sind nicht
+noetig; vorhandene Einstellungen bleiben erhalten. TaskPlopp wird direkt aus
+diesem Ordner gestartet, deshalb den Ordner danach nicht verschieben oder loeschen.
+Das Setup laedt nichts herunter. Die optionalen Diktat-Komponenten lassen sich
+spaeter ueber die Diktat-Funktion in TaskPlopp installieren.
+
 Nach einem Git-Clone kann `config.example.json` als `config.json` kopiert werden.
 Ohne Konfiguration startet TaskPlopp mit leerer Favoritenliste; Favoriten lassen
 sich anschliessend ueber die GUI hinzufuegen. Persoenliche `config.json`, deren
@@ -17,7 +26,7 @@ Sicherungen und `shortcuts` werden nicht in Git versioniert. `Set-LocalFavorites
 und der zugehoerige lokale Test enthalten die Einrichtung fuer Tobias' Rechner
 und sind kein allgemeiner Installationsschritt fuer andere Nutzer.
 
-Einmal in Windows PowerShell ausfuehren:
+Alternativ einmal in Windows PowerShell ausfuehren:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\CodexProjekte\TaskPlopp\Install-Shortcut.ps1
@@ -153,7 +162,7 @@ beide Ueberwachungen gleichzeitig betreiben.
   Bei lokalen Programmen werden zuvor offene Citrix-Fenster minimiert, damit der
   Vollbild-Viewer das Ziel nicht verdeckt. Citrix bleibt verbunden. Beim Auswaehlen
   eines Citrix-Fensters wird Citrix selbst nicht minimiert.
-  Nach erfolgreichem Wechsel blendet sich die GUI aus; derselbe Prozess bleibt geladen.
+  Nach erfolgreichem Wechsel minimiert sich die GUI in die normale Taskleiste; derselbe Prozess bleibt geladen.
 - Favoriten erscheinen auch ohne offenes Fenster als Button **Starten**.
   Der Klick aktiviert ein passendes Fenster oder startet die konfigurierte App.
 - **Konfiguration > Offenes Fenster hinzufuegen**: Fenster auswaehlen. TaskPlopp
@@ -183,7 +192,7 @@ beide Ueberwachungen gleichzeitig betreiben.
 - **Aktualisieren** liest die offenen Fenster erneut ein.
 - **Citrix minimieren** minimiert sichtbare Fenster der Prozesse `wfica32`,
   `CDViewer`, `Citrix.DesktopViewer.App`, `SelfService`, `Receiver` und `CitrixWorkspaceApp`. Sitzungen werden
-  weder getrennt noch beendet. Die GUI blendet sich danach aus.
+  weder getrennt noch beendet. TaskPlopp minimiert sich danach in die normale Taskleiste.
 - Ein erneuter Start holt die vorhandene GUI nach vorn. Das X blendet sie aus; beendet wird TaskPlopp ueber das Symbol im Infobereich.
 - Programmstarts verwenden eine EXE, eine Windows-Startverknuepfung oder eine
   registrierte App-ID. Startziele gelten fuer den jeweiligen PC. Programme
@@ -438,7 +447,7 @@ Es werden keine Programme gestartet, Fenster geschlossen oder minimiert.
 Rechtsklick auf den Fensterbutton: **Letzte Anordnung rueckgaengig** oder einen
 laufenden Fensterauftrag abbrechen. Escape bricht Aufnahme, Transkription oder
 KI-Planung ab. Eine begonnene Anwendung/Undo wird kurz zu Ende gefuehrt; normales
-Schliessen wartet darauf. Nach Anwendung blendet TaskPlopp sich aus. Hinweise stehen
+Schliessen wartet darauf. Nach Anwendung minimiert TaskPlopp sich in die Taskleiste. Hinweise stehen
 weiter in der Statusleiste beim erneuten Oeffnen mit dem konfigurierten Hotkey.
 Es gibt genau einen Undo-Schritt im RAM, auch nach Teilerfolgen. Ein Neustart verwirft ihn.
 Windows-Mindestgroessen, Zugriffsrechte und dauerhaft oben liegende Fremdfenster
@@ -448,7 +457,7 @@ Unter **Konfiguration > Fensterordner** steht das OpenAI-Modell (Standard gpt-4.
 Die API benoetigt einen passenden Projektzugriff und kann Kosten verursachen.
 Die vorhandene binaere Datei `%LOCALAPPDATA%\TaskPlopp\Secrets\OpenAI.dpapi` wird mit
 Windows-DPAPI fuer das aktuelle Benutzerkonto entschluesselt. Sie ist nicht Teil von
-Git oder Konfigurations-Exporten; weitere PCs benoetigen eine eigene Schluesselablage.
+Git oder Konfigurations-Exporten; weitere PCs richten den Key ueber dieselbe Maske ein.
 Diktat bleibt lokal. Beim Fensterordner werden dagegen transkribierter Arbeitsauftrag,
 Fenstertitel und Bilder der Monitore an OpenAI gesendet (Responses API, store=false).
 Bilder und Schluessel bleiben lokal ausschliesslich im Worker-RAM, ohne Bildarchiv.
@@ -460,3 +469,34 @@ Mit `-Api` kommen zwei echte API-Aufrufe ausschliesslich mit kuenstlichen Inhalt
 hinzu (Metadaten allein / mit selbst gezeichnetem Testbild). Reale Desktopbilder
 werden dabei nicht hochgeladen. Siehe `docs/Verifier_2026_11_08_KI_Fensterordner.md`.
 Eine bereits laufende TaskPlopp-Instanz muss zum Laden der neuen Version neu starten.
+
+## API-Key bequem einrichten
+
+Unter **Zahnrad > Fensterordner** den OpenAI-Key in das verdeckte Feld eingeben
+und **API-Key speichern** anklicken. Bei Erfolg leert sich das Feld und die
+Statusleiste meldet gruen **API-Key lokal gespeichert**. Es erfolgt dabei kein
+Online-Test; die API-Gueltigkeit zeigt sich beim Einsatz des Fensterordners.
+Ein vorhandener Key wird nie in die Maske geladen. Unverwendbare lokale Dateien
+werden angezeigt und koennen durch eine neue Eingabe ersetzt werden.
+
+**API-Key speichern** wirkt sofort, getrennt von den uebrigen Einstellungen.
+**Abbrechen** unten nimmt diesen bereits erfolgten Schritt nicht zurueck.
+Leere/ungueltige Eingaben und fehlgeschlagenes Speichern erhalten einen bisherigen
+Key. Der Key liegt weiterhin ausschliesslich lokal mit DPAPI fuer dieses Windows-Konto
+geschuetzt vor. Keine Konsole oder Administratorrechte erforderlich.
+
+## Minimieren und Schliessen
+
+- Der Minimierbutton behaelt TaskPlopp als normales Fenster in der Windows-Taskleiste.
+- Nach Favoritenwahl, erfolgreichem Fensterwechsel, Citrix-Aktion und KI-Anordnung/Undo
+  minimiert TaskPlopp ebenfalls in die Taskleiste.
+- Das **X** oben rechts blendet das Hauptfenster in den Infobereich neben der Uhr aus.
+  Hotkey, Aufnahme und residente Funktionen laufen weiter. Hotkey oder Tray-Oeffnen
+  holen die GUI wieder hervor.
+- **TaskPlopp beenden** im Tray beendet den Prozess tatsaechlich.
+- Fuer einen unverdeckten Screenshot wird die GUI weiterhin kurz intern verborgen.
+
+`Test-TaskPloppKeyAndWindow.ps1` prueft Schluesselspeicherung ausschliesslich mit
+kuenstlichen Werten in Tempordnern und testet die Fensterzustaende ohne Benutzerfenster
+zu bewegen. Keine echten Schluessel oder API-Anfragen. Abnahme und Grenzen:
+`docs/Verifier_2026_11_08_API_Key_und_Minimieren.md`.

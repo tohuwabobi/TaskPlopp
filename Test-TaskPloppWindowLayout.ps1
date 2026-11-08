@@ -97,7 +97,7 @@ try{
             foreach($code in @('HTTP_401','HTTP_429','HTTP_500','API_TIMEOUT','KEY_UNAVAILABLE','CAPTURE_FAILED','MONITORS_CHANGED')){
                 $text='CaptureDone'+"`n"+(@{Ok=$false;Code=$code}|ConvertTo-Json -Compress)+"`n"
                 $reader=[IO.StringReader]::new($text);$errors=[IO.StringReader]::new('')
-                $process=[pscustomobject]@{HasExited=$true};$process|Add-Member ScriptMethod Dispose {}
+                $process=[pscustomobject]@{HasExited=$true;StandardOutput=$reader};$process|Add-Member ScriptMethod Dispose {}
                 $script:LayoutMode='Plan';$sender.Hide()
                 $script:LayoutJob=[pscustomobject]@{Process=$process;Output=$reader.ReadLineAsync();Errors=$errors.ReadToEndAsync();Write=[Threading.Tasks.Task]::Delay(0);InputClosed=$true;Result=$null;Watch=[Diagnostics.Stopwatch]::StartNew()}
                 Invoke-TaskPloppLayoutTick

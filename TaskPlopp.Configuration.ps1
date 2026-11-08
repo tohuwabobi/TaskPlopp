@@ -145,8 +145,29 @@ function Show-TaskPloppConfiguration {
     $layoutLabel=[Windows.Forms.Label]::new();$layoutLabel.AutoSize=$true;$layoutLabel.Text='OpenAI-Modell fuer den KI-Fensterordner:'
     $layoutModel=[Windows.Forms.TextBox]::new();$layoutModel.Name='WindowLayoutModel';$layoutModel.Width=320;$layoutModel.Text=$working.WindowLayoutModel
     $layoutHelp=[Windows.Forms.Label]::new();$layoutHelp.AutoSize=$true;$layoutHelp.MaximumSize=[Drawing.Size]::new(700,0)
-    $layoutHelp.Text="Erster Klick: Arbeitsziel sprechen. Zweiter Klick: Fenster anordnen.`r`nSprache wird lokal transkribiert. Desktopbilder und Fenstertitel werden`r`nan OpenAI gesendet; API-Nutzung kann Kosten verursachen.`r`nRechtsklick auf Fensterordner: letzte Anordnung rueckgaengig.`r`nSchluessel: %LOCALAPPDATA%\TaskPlopp\Secrets\OpenAI.dpapi`r`nBenutzergebunden; wird nicht exportiert. Keine Fenster werden geschlossen."
-    $layoutSettings.Controls.AddRange(@($layoutLabel,$layoutModel,$layoutHelp));$layoutTab.Controls.Add($layoutSettings);[void]$tabs.TabPages.Add($layoutTab)
+    $layoutHelp.Text="Erster Klick: Arbeitsziel sprechen. Zweiter Klick: Fenster anordnen.`r`nSprache wird lokal transkribiert. Desktopbilder und Fenstertitel werden`r`nan OpenAI gesendet; API-Nutzung kann Kosten verursachen.`r`nRechtsklick auf Fensterordner: letzte Anordnung rueckgaengig.`r`nDer Key gilt fuer dieses Windows-Konto und wird nicht exportiert. Keine Fenster werden geschlossen."
+    $keyLabel=[Windows.Forms.Label]::new();$keyLabel.AutoSize=$true;$keyLabel.Text='OpenAI-API-Key fuer diesen PC:'
+    $keyInput=[Windows.Forms.TextBox]::new();$keyInput.Name='OpenAIKey';$keyInput.Width=420;$keyInput.UseSystemPasswordChar=$true
+    $keyState=[Windows.Forms.Label]::new();$keyState.Name='OpenAIKeyState';$keyState.AutoSize=$true
+    $updateKeyState={
+        $keyState.Text=if(Test-TaskPloppOpenAIKey){'Lokal eingerichtet (nicht online geprueft).'}elseif([IO.File]::Exists((Get-TaskPloppOpenAIKeyPath))){'Vorhandene Schluesseldatei ist nicht verwendbar. Bitte Key neu speichern.'}else{'Noch kein API-Key eingerichtet.'}
+    }
+    & $updateKeyState
+    $keySave=[Windows.Forms.Button]::new();$keySave.Name='SaveOpenAIKey';$keySave.Text='API-Key speichern';$keySave.AutoSize=$true
+    $keySave.Add_Click({
+        try{Save-TaskPloppOpenAIKey $keyInput.Text}
+        catch{
+            $detail=if($_.Exception.Message-eq'KEY_FORMAT'){'Bitte einen OpenAI-Key beginnend mit sk- ohne Leerzeichen eingeben. Ein vorhandener Key bleibt erhalten.'}else{'Lokales Speichern fehlgeschlagen. Ein vorhandener Key bleibt erhalten. Bitte Schreibrechte pruefen.'}
+            Set-TaskPloppMessage Error 'API-Key nicht gespeichert' $detail
+            return
+        }
+        # The file has been published. A later UI failure must not report a failed save.
+        $keyInput.Clear();$keyState.Text='Lokal eingerichtet (nicht online geprueft).'
+        Set-TaskPloppMessage Success 'API-Key lokal gespeichert' 'Gilt sofort auf diesem PC. Keine Online-Pruefung durchgefuehrt.'
+    })
+    $keyHelp=[Windows.Forms.Label]::new();$keyHelp.AutoSize=$true;$keyHelp.MaximumSize=[Drawing.Size]::new(700,0)
+    $keyHelp.Text="API-Key speichern gilt sofort und getrennt von den anderen Einstellungen.`r`nAbbrechen unten nimmt einen bereits gespeicherten Key nicht zurueck.`r`nEin vorhandener Key wird nie angezeigt. Neue Eingabe ersetzt ihn lokal."
+    $layoutSettings.Controls.AddRange(@($layoutLabel,$layoutModel,$keyLabel,$keyInput,$keyState,$keySave,$keyHelp,$layoutHelp));$layoutTab.Controls.Add($layoutSettings);[void]$tabs.TabPages.Add($layoutTab)
     $hotkeyTab=New-Object Windows.Forms.TabPage
     $hotkeyTab.Name='HotkeyTab';$hotkeyTab.Text='Tastenkombination'
     $hotkeyLayout=New-Object Windows.Forms.FlowLayoutPanel
@@ -409,6 +430,6 @@ function Show-TaskPloppConfiguration {
     $fit=[Drawing.Size]::new([Math]::Min($dialog.Width,$area.Width-40),[Math]::Min($dialog.Height,$area.Height-40))
     $dialog.MinimumSize=$fit;$dialog.Size=$fit
     $script:ConfigurationOpen=$true
-    try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
+    try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$keyInput.Clear();$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
     Show-TaskPloppView
 }

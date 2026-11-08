@@ -4,6 +4,45 @@ $script:LayoutMode=''
 $script:LayoutCapturing=$false
 $script:LayoutUndo=@()
 $script:LayoutClosePending=$false
+function Get-TaskPloppOpenAIKeyPath {
+    Join-Path $env:LOCALAPPDATA 'TaskPlopp\Secrets\OpenAI.dpapi'
+}
+function Test-TaskPloppOpenAIKey([string]$Path=(Get-TaskPloppOpenAIKeyPath)) {
+    $plain=$null
+    try{
+        Add-Type -AssemblyName System.Security
+        $plain=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($Path),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+        return [Text.Encoding]::UTF8.GetString($plain)-cmatch'^sk-[A-Za-z0-9_-]+$'
+    }catch{return $false}
+    finally{if($null-ne$plain){[Array]::Clear($plain,0,$plain.Length)}}
+}
+function Save-TaskPloppOpenAIKey([string]$Key,[string]$Path=(Get-TaskPloppOpenAIKeyPath)) {
+    $plain=$null;$verified=$null;$temporary=$null
+    try{
+        $Key=$Key.Trim()
+        if($Key-cnotmatch'^sk-[A-Za-z0-9_-]+$'){throw 'KEY_FORMAT'}
+        Add-Type -AssemblyName System.Security
+        $plain=[Text.Encoding]::UTF8.GetBytes($Key)
+        $encrypted=[Security.Cryptography.ProtectedData]::Protect($plain,$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+        $directory=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Path));$null=[IO.Directory]::CreateDirectory($directory)
+        $temporary=Join-Path $directory ('OpenAI.'+[guid]::NewGuid().ToString('N')+'.tmp')
+        [IO.File]::WriteAllBytes($temporary,$encrypted)
+        $verified=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($temporary),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+        if($plain.Length-ne$verified.Length){throw 'KEY_SAVE'}
+        $difference=0;for($i=0;$i-lt$plain.Length;$i++){$difference=$difference-bor($plain[$i]-bxor$verified[$i])}
+        if($difference-ne0){throw 'KEY_SAVE'}
+        if([IO.File]::Exists($Path)){[IO.File]::Replace($temporary,$Path,[Management.Automation.Language.NullString]::Value)}else{[IO.File]::Move($temporary,$Path)}
+        $temporary=$null
+    }catch{
+        # Error text must never include an entered key or a crypto exception.
+        if($_.Exception.Message-eq'KEY_FORMAT'){throw 'KEY_FORMAT'}
+        throw 'KEY_SAVE'
+    }finally{
+        $Key=$null
+        foreach($bytes in @($plain,$verified)){if($null-ne$bytes){[Array]::Clear($bytes,0,$bytes.Length)}}
+        if($temporary-and[IO.File]::Exists($temporary)){try{[IO.File]::Delete($temporary)}catch{}}
+    }
+}
 function Get-TaskPloppLayoutMonitors {
     @(foreach($screen in [Windows.Forms.Screen]::AllScreens){
         [pscustomobject]@{id=$screen.DeviceName;x=$screen.Bounds.X;y=$screen.Bounds.Y;width=$screen.Bounds.Width;height=$screen.Bounds.Height;
@@ -85,7 +124,7 @@ function Get-TaskPloppLayoutAnswer([string]$Intent,$Context,$Pictures,[string]$M
     $plain=$null;$key=$null;$client=$null;$request=$null;$response=$null
     try{
         try{
-            $plain=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes((Join-Path $env:LOCALAPPDATA 'TaskPlopp\Secrets\OpenAI.dpapi')),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+            $plain=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes((Get-TaskPloppOpenAIKeyPath)),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
             $key=[Text.Encoding]::UTF8.GetString($plain)
             if($key-cnotmatch'^sk-[A-Za-z0-9_-]+$'){throw 'KEY_UNAVAILABLE'}
         }catch{throw 'KEY_UNAVAILABLE'}
@@ -213,7 +252,7 @@ function Invoke-TaskPloppWindowLayout {
     if($null-ne$script:LayoutJob){$detail=if($script:LayoutMode-eq'Plan'){'Escape bricht die Planung ab.'}else{'Anordnung wird abgeschlossen; danach ist Rueckgaengig moeglich.'};Set-TaskPloppMessage Notice 'Fensterordner arbeitet' $detail;return}
     if($script:DictationPhase-eq'Recording'-and$script:DictationPurpose-eq'Layout'){Stop-TaskPloppRecording;return}
     if($script:DictationPhase-ne'Ready'-or$null-ne$script:DictationInstaller){Set-TaskPloppMessage Notice 'Diktat ist noch beschaeftigt' 'Bitte zuerst die laufende Aufnahme oder Transkription beenden.';return}
-    if(-not[IO.File]::Exists((Join-Path $env:LOCALAPPDATA 'TaskPlopp\Secrets\OpenAI.dpapi'))){Set-TaskPloppMessage Error 'OpenAI-Schluessel fehlt' 'Die lokale DPAPI-Datei muss fuer dieses Windows-Konto eingerichtet sein.';return}
+    if(-not[IO.File]::Exists((Get-TaskPloppOpenAIKeyPath))){Set-TaskPloppMessage Error 'OpenAI-Schluessel fehlt' 'Bitte unter Konfiguration > Fensterordner den API-Key speichern.';return}
     Invoke-TaskPloppDictation -Purpose Layout
 }
 function Start-TaskPloppLayoutProcess([string]$Mode,$Request) {
@@ -281,11 +320,11 @@ function Invoke-TaskPloppLayoutTick {
             Start-TaskPloppLayoutProcess Apply @{Answer=$result.Answer;Context=$result.Context}
             Set-TaskPloppMessage Notice 'Fenster werden angeordnet' 'Rechtsklick auf Fensterordner: danach rueckgaengig.'
         }elseif($mode-eq'Apply'){
-            if($result.Mutated-gt0){$script:LayoutUndo=@($result.Snapshots);$script:Main.Hide()}
+            if($result.Mutated-gt0){$script:LayoutUndo=@($result.Snapshots);Minimize-TaskPlopp}
             $level=if($result.Warnings){'Warning'}else{'Success'}
             Set-TaskPloppMessage $level "Fensteranordnung: $($result.Applied) passend, $($result.Warnings) Hinweise" ($result.Reason+' Rechtsklick: rueckgaengig. Manche Fenster erzwingen Mindestgroessen oder bleiben im Vordergrund.')
         }else{
-            $script:LayoutUndo=@();$script:Main.Hide()
+            $script:LayoutUndo=@();Minimize-TaskPlopp
             $level=if($result.Warnings){'Warning'}else{'Success'}
             Set-TaskPloppMessage $level "Anordnung wiederhergestellt: $($result.Restored) Fenster" "Nicht wiederhergestellt: $($result.Warnings)."
         }
@@ -295,7 +334,7 @@ function Invoke-TaskPloppLayoutTick {
             '^HTTP_401$' {'OpenAI-Schluessel ist ungueltig oder abgelaufen.';break}
             '^HTTP_429$' {'OpenAI-Kontingent oder Anfragelimit erreicht. Bitte spaeter erneut versuchen.';break}
             '^HTTP_403$|^HTTP_404$' {'Kein Zugriff auf das Modell. Modellname und OpenAI-Projekt pruefen.';break}
-            '^KEY_UNAVAILABLE$' {'DPAPI-Schluesseldatei fehlt oder gehoert nicht zu diesem Windows-Konto.';break}
+            '^KEY_UNAVAILABLE$' {'Bitte unter Konfiguration > Fensterordner den API-Key fuer dieses Windows-Konto speichern.';break}
             '^API_TIMEOUT$' {'OpenAI hat nicht rechtzeitig geantwortet.';break}
             '^STALE_WINDOWS$|^MONITORS_CHANGED$' {'Fenster oder Monitore haben sich geaendert. Auftrag bitte wiederholen.';break}
             '^NO_WINDOWS$' {'Keine geeigneten sichtbaren lokalen Fenster gefunden.';break}

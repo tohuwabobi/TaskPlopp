@@ -26,3 +26,10 @@ TaskPlopp.Transfer.ps1 kennt das neue Feld WindowLayoutModel, damit bestehendes 
 TaskPlopp neu starten. Fenster-Symbol rechts vom Diktat anklicken, Arbeitsziel sprechen,
 nochmals klicken; Anordnung beobachten. TaskPlopp wieder oeffnen, Rechtsklick auf
 das Fenstersymbol und letzte Anordnung rueckgaengig machen. Normales Diktat bleibt separat.
+## Nachtrag: praktische Abnahme
+Tobias hat den Fensterordner auf HSPWO-GANDALF erfolgreich getestet und danach auch
+Rueckgaengig bestaetigt. Er akzeptiert diesen Praxistest als ausreichend; ARKANIS
+wird im normalen Einsatz erprobt. Die eigene weisse Screenshot-Fixture war im
+spaeteren Regressionstest im RAM erfolgreich verifizierbar. Der fruehere SKIP
+bleibt als historischer Teststand dokumentiert. API-Key-Einrichtung und Taskleisten-
+verhalten siehe Verifier_2026_11_08_API_Key_und_Minimieren.md.
