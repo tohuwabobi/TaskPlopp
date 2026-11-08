@@ -13,12 +13,13 @@ function ConvertTo-TaskPloppSettings($Data) {
     if($Data.PSObject.Properties.Name -notcontains 'HotkeyKey') {
         $Data | Add-Member -NotePropertyName HotkeyKey -NotePropertyValue 'F10'
     }
-    if(($Data.HotkeyModifiers -isnot [int] -and $Data.HotkeyModifiers -isnot [long]) -or $Data.HotkeyModifiers -lt 1 -or $Data.HotkeyModifiers -gt 15) {
-        throw 'Tastenkombination: Mindestens Strg, Alt, Umschalt oder Win waehlen.'
+    if(($Data.HotkeyModifiers -isnot [int] -and $Data.HotkeyModifiers -isnot [long]) -or $Data.HotkeyModifiers -lt 0 -or $Data.HotkeyModifiers -gt 15) {
+        throw 'Tastenkombination: Ungueltige Zusatztasten.'
     }
-    if($Data.HotkeyKey -isnot [string] -or $Data.HotkeyKey -cnotmatch '^(?:[A-Z]|[0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$' -or $Data.HotkeyKey -eq 'F12') {
-        throw 'Tastenkombination: A-Z, 0-9 oder F1-F24 waehlen (F12 ist fuer Windows reserviert).'
+    if($Data.HotkeyKey -isnot [string] -or $Data.HotkeyKey -cnotmatch '^(?:[A-Z]|[0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Taschenrechner)$' -or $Data.HotkeyKey -eq 'F12') {
+        throw 'Tastenkombination: A-Z, 0-9, F1-F24 oder Taschenrechner waehlen (F12 ist fuer Windows reserviert).'
     }
+    if($Data.HotkeyModifiers -eq 0 -and $Data.HotkeyKey -ne 'Taschenrechner'){throw 'Tastenkombination: Mindestens eine Zusatztaste waehlen; nur Taschenrechner darf alleine verwendet werden.'}
     if($Data.PSObject.Properties.Name -notcontains 'DictationEngine') {
         $Data | Add-Member -NotePropertyName DictationEngine -NotePropertyValue 'Whisper'
     }

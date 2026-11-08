@@ -555,3 +555,14 @@ danach verwendet sie wieder den normalen GUI-Hintergrund. Eine neue Eingabe erse
 die vorige Erfolgsmeldung sofort. Fehler bleiben rot und werden nicht durch den
 Zeitablauf einer vorherigen Erfolgsmeldung entfernt. Laufende Aufnahmehinweise
 werden durch diese kurze Speicherbestaetigung nicht automatisch beendet.
+## Meldungen und Taschenrechner-Taste
+
+Ergebnisse und Fehler des Fensterordners verschwinden nach 15 Sekunden. Der runde
+Aktualisieren-Button entfernt bisherige Meldungen sofort. Laufende Aufnahme,
+Transkription, Einrichtung und Fensterplanung/-anordnung werden dabei nicht ausgeblendet.
+Unter Zahnrad > Tastenkombination ist auch Taschenrechner waehlbar. Zuerst diesen
+Eintrag waehlen, dann bei Bedarf Strg/Alt/Umschalt/Win abwaehlen. Die Sondertaste darf
+alleine verwendet werden; normale Buchstaben/F-Tasten benoetigen weiterhin Zusatztasten.
+Die bisherige Belegung bleibt erhalten, bis du selbst etwas aenderst. Falls Logitech
+die Sondertaste anders belegt, diese Belegung dort pruefen. Echten Tastendruck auch
+im Citrix-Vollbild testen; erfolgreiche Windows-Registrierung allein belegt das nicht.

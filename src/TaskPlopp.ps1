@@ -341,7 +341,7 @@ try {
         } finally { $script:ListPanel.ResumeLayout() }
     }
 
-    $script:RefreshButton = Add-ToolbarButton ([string][char]0xE72C) { Show-TaskPloppView } -Hint 'Aktuelle Ansicht aktualisieren' -Icon -Right
+    $script:RefreshButton = Add-ToolbarButton ([string][char]0xE72C) { if($null-eq$script:LayoutJob-and$null-eq$script:DictationInstaller){Clear-TaskPloppMessage}; Show-TaskPloppView } -Hint 'Aktuelle Ansicht aktualisieren' -Icon -Right
     $script:RefreshButton.Name='RefreshButton'
     $script:ConfigurationButton = Add-ToolbarButton ([string][char]0xE713) { Show-TaskPloppConfiguration } -Hint 'Konfiguration oeffnen (Rechtsklick: sichern/uebertragen)' -Icon -Right
     $script:ConfigurationButton.Name='ConfigurationButton'

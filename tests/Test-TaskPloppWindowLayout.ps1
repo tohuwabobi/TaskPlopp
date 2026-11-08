@@ -137,6 +137,22 @@ try{
             Cancel-TaskPloppWindowLayout;Assert ($null-ne$script:LayoutJob) 'Apply killed by Escape'
             $sender.Close();Assert ($script:LayoutClosePending-and-not$sender.IsDisposed) 'Close not deferred during Apply'
             $script:LayoutJob=$null;$script:LayoutMode='';$script:LayoutClosePending=$false
+            Set-TaskPloppMessage Warning 'Completed layout fixture' 'Detail' -Seconds 15
+            Assert ($script:MessageBar.Tag.ExpireAt-gt0) 'Layout result has no expiry'
+            $script:RefreshButton.PerformClick()
+            Assert ($script:MessageBar.Tag.Lines[0]-eq''-and$script:MessageBar.Tag.ExpireAt-eq0) 'Refresh retains completed message'
+            Set-TaskPloppMessage Error 'Expiring fixture' '' -Seconds 15
+            $script:MessageBar.Tag.ExpireAt=[long]1
+            Assert ((Update-TaskPloppMessageTimeout $script:MessageBar)-and$script:MessageBar.Tag.Lines[0]-eq'') 'Result did not expire'
+            Set-TaskPloppActivity Recording
+            $script:RefreshButton.PerformClick()
+            Assert ($script:MessageBar.Tag.Activity-eq'Recording'-and$script:MessageBar.Tag.Lines[0]) 'Refresh hides recording'
+            Set-TaskPloppMessage Notice 'Planning fixture' ''
+            $script:LayoutJob=[pscustomobject]@{Fixture=$true}
+            $script:RefreshButton.PerformClick()
+            Assert ($script:MessageBar.Tag.Lines[0]-like'*Planning fixture*') 'Refresh hides running layout'
+            $script:LayoutJob=$null
+            Clear-TaskPloppMessage
             Write-Host 'OK: GUI capture marker/errors, local transcript dispatch without clipboard, caption, model setting, real cancellation, deferred Apply close.'
         }catch{$global:LayoutUiFailure=$_}
         finally{$script:LayoutJob=$null;$script:LayoutMode='';$script:DictationPhase='Ready';$script:DictationRecorder=$null;$sender.Close()}

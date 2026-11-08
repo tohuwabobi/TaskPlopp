@@ -8,6 +8,9 @@ $spec=Get-TaskPloppHotkeySpec $script:Settings
 Assert ($spec.Label -eq 'Strg+Alt+F10' -and $spec.Modifiers -eq 0x4003 -and $spec.Key -eq 0x79) 'Falscher Standard-Keycode'
 $number=Get-TaskPloppHotkeySpec ([pscustomobject]@{HotkeyModifiers=12;HotkeyKey='0'})
 Assert ($number.Key -eq 0x30 -and $number.Label -eq 'Umschalt+Win+0') 'Ziffer/Modifier falsch'
+$calc=ConvertTo-TaskPloppSettings ([pscustomobject]@{Programs=@();HotkeyModifiers=0;HotkeyKey='Taschenrechner'})
+$calcSpec=Get-TaskPloppHotkeySpec $calc
+Assert ($calcSpec.Key-eq0xB7-and$calcSpec.Modifiers-eq0x4000-and$calcSpec.Label-eq'Taschenrechner') 'Calculator key/code without modifiers invalid'
 foreach($bad in @(@(0,'P'),@(16,'P'),@(3,'F12'),@(3,'Escape'),@(3,'p'))){
     $data=[pscustomobject]@{Programs=@();HotkeyModifiers=$bad[0];HotkeyKey=$bad[1]}
     $caught=$false;try{$null=ConvertTo-TaskPloppSettings $data}catch{$caught=$true}
@@ -21,6 +24,15 @@ $script:HotkeysEnabled=$true
 $reservations=@()
 $script:WakeEvent=[Threading.EventWaitHandle]::new($false,[Threading.EventResetMode]::AutoReset)
 try {
+    $calculatorListener=$null
+    try{
+        try{$calculatorListener=New-TaskPloppHotkeyListener $calcSpec}catch{Write-Host 'SKIP: Calculator key already registered locally; physical key still requires manual test.'}
+        if($calculatorListener){
+            $null=[TaskPloppInterop.User]::PostThreadMessageW($calculatorListener.State.ThreadId,0x312,[IntPtr]1,[IntPtr]0)
+            Assert ($script:WakeEvent.WaitOne(2000)) 'Calculator listener did not wake'
+            Write-Host 'OK: Calculator key registered without modifiers, synthetic notification received, registration released.'
+        }
+    }finally{if($calculatorListener){$calculatorListener.Dispose()}}
     foreach($testKeyName in @('F20','F21','F22','F23','F24','F19','F18')){
         $data=ConvertTo-TaskPloppSettings ([pscustomobject]@{Programs=@();ShowOpenWindows=$false;HotkeyModifiers=7;HotkeyKey=$testKeyName})
         $spec=Get-TaskPloppHotkeySpec $data
@@ -85,7 +97,13 @@ try {
             function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
             Show-TaskPloppConfiguration -OnShown {
                 param($dialog,$args)
-                $dialog.Controls.Find('HotkeyKey',$true)[0].SelectedItem='F9'
+                $keys=$dialog.Controls.Find('HotkeyKey',$true)[0]
+                Assert ($keys.Items.Contains('Taschenrechner')) 'Calculator missing from selection'
+                $keys.SelectedItem='Taschenrechner'
+                foreach($bit in @(2,1,4,8)){$dialog.Controls.Find(('HotkeyModifier'+$bit),$true)[0].Checked=$false}
+                Assert ((Get-Settings -Path $testConfig).HotkeyModifiers-eq0-and$dialog.Controls.Find('HotkeyPreview',$true)[0].Text-eq'Auswahl: Taschenrechner') 'Calculator alone not autosaved/previewed'
+                $dialog.Controls.Find('HotkeyModifier2',$true)[0].Checked=$true
+                $keys.SelectedItem='F9'
                 $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
             Assert ((Get-Settings -Path $testConfig).HotkeyKey -eq 'F9') 'Sofortspeichern hat Hotkey nicht geaendert'

@@ -1,7 +1,7 @@
 ﻿$script:HotkeyCleanupWarning=''
 # Register a replacement before saving/releasing the old hotkey.
 function Get-TaskPloppHotkeySpec($Settings) {
-    $keyName=if($Settings.HotkeyKey -match '^\d$'){'D'+$Settings.HotkeyKey}else{$Settings.HotkeyKey}
+    $keyName=if($Settings.HotkeyKey -match '^\d$'){'D'+$Settings.HotkeyKey}elseif($Settings.HotkeyKey-eq'Taschenrechner'){'LaunchApplication2'}else{$Settings.HotkeyKey}
     $names=@()
     if($Settings.HotkeyModifiers -band 2){$names+='Strg'}
     if($Settings.HotkeyModifiers -band 1){$names+='Alt'}

@@ -436,7 +436,7 @@ function Invoke-TaskPloppLayoutTick {
         if(-not$result.Ok){throw $result.Code}
         if($mode-eq'Plan'){
             Assert-TaskPloppLayout $result.Answer $result.Context
-            if(-not$result.Answer.windows.Count){$script:Main.Show();Set-TaskPloppMessage Notice 'Keine Fensteranordnung vorgeschlagen' $result.Answer.reason;return}
+            if(-not$result.Answer.windows.Count){$script:Main.Show();Set-TaskPloppMessage Notice 'Keine Fensteranordnung vorgeschlagen' $result.Answer.reason -Seconds 15;return}
             Start-TaskPloppLayoutProcess Apply @{Answer=$result.Answer;Context=$result.Context}
             Set-TaskPloppMessage Notice 'Programme werden bei Bedarf geoeffnet und Fenster angeordnet' 'Rechtsklick auf Fensterordner: danach rueckgaengig.'
         }elseif($mode-eq'Apply'){
@@ -444,11 +444,11 @@ function Invoke-TaskPloppLayoutTick {
             $level=if($result.Warnings){'Warning'}else{'Success'}
             $started=[int](Get-TextProperty $result Started)
             $issues=if($result.PSObject.Properties.Name-contains'Issues'){@($result.Issues)-join'; '}else{''}
-            Set-TaskPloppMessage $level "Fensteranordnung: $($result.Applied) passend, $($result.Warnings) Hinweise" ("Startaufrufe: $started. "+$issues+' '+$result.Reason+' Rechtsklick: rueckgaengig. Neu geoeffnete Programme bleiben dabei offen.')
+            Set-TaskPloppMessage $level "Fensteranordnung: $($result.Applied) passend, $($result.Warnings) Hinweise" ("Startaufrufe: $started. "+$issues+' '+$result.Reason+' Rechtsklick: rueckgaengig. Neu geoeffnete Programme bleiben dabei offen.') -Seconds 15
         }else{
             $script:LayoutUndo=@();Minimize-TaskPlopp
             $level=if($result.Warnings){'Warning'}else{'Success'}
-            Set-TaskPloppMessage $level "Anordnung wiederhergestellt: $($result.Restored) Fenster" "Nicht wiederhergestellt: $($result.Warnings)."
+            Set-TaskPloppMessage $level "Anordnung wiederhergestellt: $($result.Restored) Fenster" "Nicht wiederhergestellt: $($result.Warnings)." -Seconds 15
         }
     }catch{
         Stop-TaskPloppLayoutProcess;$script:Main.Show()
@@ -464,7 +464,7 @@ function Invoke-TaskPloppLayoutTick {
             '^INVALID_LAYOUT$' {'Die KI hat keine gueltigen Fensterpositionen geliefert. Kein Start und keine Anordnung ausgefuehrt; bitte Auftrag praezisieren.';break}
             default {'Planung oder Anordnung fehlgeschlagen. Netzwerk, Modell und Fenster pruefen.'}
         }
-        Set-TaskPloppMessage Error 'Fensterordner konnte nicht abschliessen' $detail
+        Set-TaskPloppMessage Error 'Fensterordner konnte nicht abschliessen' $detail -Seconds 15
     }
     if($script:LayoutClosePending-and$null-eq$script:LayoutJob){$script:LayoutClosePending=$false;$script:Main.Close()}
 }

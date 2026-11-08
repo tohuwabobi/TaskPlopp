@@ -62,6 +62,14 @@ function Update-TaskPloppMessageTimeout($Panel) {
     Measure-TaskPloppMessage $Panel
     return $true
 }
+function Clear-TaskPloppMessage {
+    foreach($name in 'MessageBar','ConfigurationMessageBar'){
+        $panel=Get-Variable $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if($null-eq$panel-or$panel.IsDisposed-or$panel.Tag.Activity){continue}
+        $panel.Tag.ExpireAt=[long]1
+        $null=Update-TaskPloppMessageTimeout $panel
+    }
+}
 function Set-TaskPloppMessage([string]$Kind,[string]$Summary,[string]$Detail='',[int]$Seconds=0) {
     $panels=@()
     foreach($name in 'MessageBar','ConfigurationMessageBar'){

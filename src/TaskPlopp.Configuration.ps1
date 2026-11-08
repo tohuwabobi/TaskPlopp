@@ -173,21 +173,22 @@ function Show-TaskPloppConfiguration {
         $hotkeyChecks+=$check;[void]$hotkeyModifiers.Controls.Add($check)
     }
     $hotkeyKey=New-Object Windows.Forms.ComboBox
-    $hotkeyKey.Name='HotkeyKey';$hotkeyKey.DropDownStyle='DropDownList';$hotkeyKey.Width=160
+    $hotkeyKey.Name='HotkeyKey';$hotkeyKey.DropDownStyle='DropDownList';$hotkeyKey.Width=230
     $keys=@(1..24 | Where-Object {$_ -ne 12} | ForEach-Object {"F$_"})+@(65..90 | ForEach-Object {[string][char]$_})+@(0..9 | ForEach-Object {[string]$_})
+    $keys+=@('Taschenrechner')
     $hotkeyKey.Items.AddRange([object[]]$keys);$hotkeyKey.SelectedItem=$working.HotkeyKey
     $hotkeyPreview=New-Object Windows.Forms.Label
     $hotkeyPreview.Name='HotkeyPreview';$hotkeyPreview.AutoSize=$true
     $updateHotkeyPreview={
         $bits=0;foreach($check in $hotkeyChecks){if($check.Checked){$bits=$bits -bor [int]$check.Tag}}
-        $hotkeyPreview.Text=if($bits){'Auswahl: '+(Get-TaskPloppHotkeySpec ([pscustomobject]@{HotkeyModifiers=$bits;HotkeyKey=[string]$hotkeyKey.SelectedItem})).Label}else{'Bitte mindestens eine Zusatztaste waehlen.'}
+        $hotkeyPreview.Text=if($bits-or$hotkeyKey.SelectedItem-eq'Taschenrechner'){'Auswahl: '+(Get-TaskPloppHotkeySpec ([pscustomobject]@{HotkeyModifiers=$bits;HotkeyKey=[string]$hotkeyKey.SelectedItem})).Label}else{'Bitte mindestens eine Zusatztaste waehlen.'}
     }
     foreach($check in $hotkeyChecks){$check.Add_CheckedChanged($updateHotkeyPreview)}
     $hotkeyKey.Add_SelectedIndexChanged($updateHotkeyPreview)
     & $updateHotkeyPreview
     $hotkeyHelp=New-Object Windows.Forms.Label
     $hotkeyHelp.AutoSize=$true;$hotkeyHelp.MaximumSize=[Drawing.Size]::new(700,0)
-    $hotkeyHelp.Text="Jede Auswahl prueft und aktiviert die Kombination sofort.`r`nIst sie belegt, bleiben bisherige Kombination und Einstellungen erhalten.`r`nStandard: Strg+Alt+F10. F12 ist fuer Windows reserviert.`r`nCitrix kann Tastenkombinationen an die entfernte Sitzung weiterreichen.`r`nBitte die gewaehlte Kombination auch im Citrix-Vollbild testen."
+    $hotkeyHelp.Text="Jede Auswahl prueft und aktiviert die Kombination sofort.`r`nIst sie belegt, bleiben bisherige Kombination und Einstellungen erhalten.`r`nStandard: Strg+Alt+F10. F12 ist fuer Windows reserviert.`r`nTaschenrechner kann auch ohne Zusatztasten verwendet werden.`r`nFalls die Taste weiter den Rechner startet: Logitech-Belegung pruefen.`r`nCitrix kann Tastenkombinationen an die entfernte Sitzung weiterreichen.`r`nBitte die gewaehlte Kombination auch im Citrix-Vollbild testen."
     $hotkeyLayout.Controls.AddRange(@($hotkeyLabel,$hotkeyModifiers,$hotkeyKey,$hotkeyPreview,$hotkeyHelp))
     $hotkeyTab.Controls.Add($hotkeyLayout);[void]$tabs.TabPages.Add($hotkeyTab)
 
