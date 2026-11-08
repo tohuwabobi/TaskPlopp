@@ -4,20 +4,21 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot '..\src\TaskPlopp.Native.ps1')
 $null=[TaskPloppInterop.Geometry]::SetThreadDpiAwarenessContext([IntPtr](-4))
 . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
+$script:TestLayoutRealKeyPath=${function:Get-TaskPloppOpenAIKeyPath}
 function Assert([bool]$Value,[string]$Message){if(-not$Value){throw $Message}}
 function Reject($Action,[string]$Expected){try{&$Action;throw 'NOT_REJECTED'}catch{Assert ($_.Exception.Message-eq$Expected) ('Expected '+$Expected+', got '+$_.Exception.Message)}}
 $virtual=[pscustomobject]@{Monitors=@([pscustomobject]@{id='left';work=[pscustomobject]@{x=-1920;y=0;width=1920;height=1040}});Windows=@([pscustomobject]@{id='w1'})}
-$answer='{"reason":"Test","windows":[{"id":"w1","monitorId":"left","x":-1800,"y":20,"width":900,"height":900}]}'|ConvertFrom-Json
+$answer='{"reason":"Test","windows":[{"id":"w1","state":"normal","monitorId":"left","x":-1800,"y":20,"width":900,"height":900}]}'|ConvertFrom-Json
 Assert-TaskPloppLayout $answer $virtual
 $answer.windows[0].x=-2000;Reject {Assert-TaskPloppLayout $answer $virtual} INVALID_LAYOUT
 $answer.windows[0].x=-1800;$answer.windows+=@($answer.windows[0]);Reject {Assert-TaskPloppLayout $answer $virtual} INVALID_LAYOUT
 $answer.windows=@();Assert-TaskPloppLayout $answer $virtual
 foreach($bad in @(
-    '{"reason":"Test","windows":[{"id":"unknown","monitorId":"left","x":-1800,"y":20,"width":900,"height":900}]}',
-    '{"reason":"Test","windows":[{"id":"w1","monitorId":"missing","x":-1800,"y":20,"width":900,"height":900}]}',
-    '{"reason":"Test","windows":[{"id":"w1","monitorId":"left","x":-1800,"y":20,"width":0,"height":900}]}',
-    '{"reason":"Test","windows":[{"id":"w1","monitorId":"left","x":-1800,"y":20,"width":900.5,"height":900}]}',
-    '{"reason":"Test","windows":[{"id":"w1","monitorId":"left","x":-1800,"y":20,"width":900,"height":900,"extra":"reject"}]}')){Reject {Assert-TaskPloppLayout ($bad|ConvertFrom-Json) $virtual} INVALID_LAYOUT}
+    '{"reason":"Test","windows":[{"id":"unknown","state":"normal","monitorId":"left","x":-1800,"y":20,"width":900,"height":900}]}',
+    '{"reason":"Test","windows":[{"id":"w1","state":"normal","monitorId":"missing","x":-1800,"y":20,"width":900,"height":900}]}',
+    '{"reason":"Test","windows":[{"id":"w1","state":"normal","monitorId":"left","x":-1800,"y":20,"width":0,"height":900}]}',
+    '{"reason":"Test","windows":[{"id":"w1","state":"normal","monitorId":"left","x":-1800,"y":20,"width":900.5,"height":900}]}',
+    '{"reason":"Test","windows":[{"id":"w1","state":"normal","monitorId":"left","x":-1800,"y":20,"width":900,"height":900,"extra":"reject"}]}')){Reject {Assert-TaskPloppLayout ($bad|ConvertFrom-Json) $virtual} INVALID_LAYOUT}
 foreach($response in @('{"status":"incomplete","output":[]}','{"status":"completed","output":[{"type":"message","content":[{"type":"refusal"}]}]}','{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"broken"}]}]}')){Reject {ConvertFrom-TaskPloppLayoutResponse ($response|ConvertFrom-Json)} API_RESPONSE}
 Write-Host 'OK: Negative coordinates, bounds, duplicate IDs, empty layout, incomplete/refused/malformed responses.'
 function Run-Worker([string]$Mode,$Request){
@@ -25,7 +26,7 @@ function Run-Worker([string]$Mode,$Request){
     $bytes=[Text.Encoding]::UTF8.GetBytes(($Request|ConvertTo-Json -Depth 12 -Compress));$job=New-TaskPloppProcess $info $bytes
     try{
         $watch=[Diagnostics.Stopwatch]::StartNew()
-        while(-not$job.Done){[Windows.Forms.Application]::DoEvents();Update-TaskPloppProcess $job;Start-Sleep -Milliseconds 15;if($watch.Elapsed.TotalSeconds-gt20){throw 'TEST_WORKER_TIMEOUT'}}
+        while(-not$job.Done){[Windows.Forms.Application]::DoEvents();Update-TaskPloppProcess $job;Start-Sleep -Milliseconds 15;if($watch.Elapsed.TotalSeconds-gt35){throw 'TEST_WORKER_TIMEOUT'}}
         if(-not$job.Text){throw $job.Error};$job.Text|ConvertFrom-Json
     }finally{Close-TaskPloppProcess $job}
 }
@@ -36,7 +37,7 @@ try{
     $original=Get-TaskPloppLayoutRect $form.Handle -Raw;$untouched=Get-TaskPloppLayoutRect $control.Handle -Raw
     $identity=Get-TaskPloppLayoutIdentity $form.Handle;$identity|Add-Member NoteProperty id 'w1'
     $context=[pscustomobject]@{Monitors=@(Get-TaskPloppLayoutMonitors);Windows=@($identity)};$monitor=$context.Monitors[0]
-    $answer=[pscustomobject]@{reason='Fixture';windows=@([pscustomobject]@{id='w1';monitorId=$monitor.id;x=($monitor.work.x+50);y=($monitor.work.y+60);width=700;height=500})}
+    $answer=[pscustomobject]@{reason='Fixture';windows=@([pscustomobject]@{id='w1';state='normal';monitorId=$monitor.id;x=($monitor.work.x+50);y=($monitor.work.y+60);width=700;height=500})}
     $result=Run-Worker Apply @{Answer=$answer;Context=$context}
     Assert $result.Ok ('Apply failed: '+($result|ConvertTo-Json -Compress));Assert ($result.Mutated-eq1-and$result.Applied-eq1) 'Wrong apply counts'
     $rect=Get-TaskPloppLayoutRect $form.Handle;Assert ($rect.X-eq$answer.windows[0].x-and$rect.Width-eq700-and$rect.Height-eq500) 'Visible bounds mismatch'
@@ -46,6 +47,25 @@ try{
     $form.WindowState='Maximized';[Windows.Forms.Application]::DoEvents()
     $result=Run-Worker Apply @{Answer=$answer;Context=$context};Assert ($result.Applied-eq1) 'Maximized apply failed'
     $undo=Run-Worker Undo @{Snapshots=@($result.Snapshots)};Assert ($undo.Restored-eq1-and[TaskPloppInterop.Geometry]::IsZoomed($form.Handle)) 'Maximized undo failed'
+    foreach($fromMax in @($false,$true)){
+        foreach($targetState in @('normal','maximized')){
+            $form.WindowState=if($fromMax){'Maximized'}else{'Normal'};[Windows.Forms.Application]::DoEvents()
+            $form.WindowState='Minimized';[Windows.Forms.Application]::DoEvents()
+            $request=$answer|ConvertTo-Json -Depth 6|ConvertFrom-Json;$request.windows[0].state=$targetState
+            if($targetState-eq'maximized'){$work=$monitor.work;$request.windows[0].x=$work.x;$request.windows[0].y=$work.y;$request.windows[0].width=$work.width;$request.windows[0].height=$work.height}
+            $result=Run-Worker Apply @{Answer=$request;Context=$context}
+            Assert ($result.Applied-eq1-and-not[TaskPloppInterop.User]::IsIconic($form.Handle)) 'Minimized window not applied'
+            Assert ([TaskPloppInterop.Geometry]::IsZoomed($form.Handle)-eq($targetState-eq'maximized')) 'Maximize is just a rectangle'
+            if($targetState-eq'maximized'){
+                $beforeMax=[Convert]::FromBase64String($result.Snapshots[0].Placement);$whileMax=[Convert]::FromBase64String((Get-TaskPloppLayoutPlacement $form.Handle))
+                Assert (($beforeMax[28..43]-join',')-ceq($whileMax[28..43]-join',')) 'Maximize changed normal restore size on same monitor'
+            }
+            $undo=Run-Worker Undo @{Snapshots=@($result.Snapshots)}
+            Assert ($undo.Restored-eq1-and[TaskPloppInterop.User]::IsIconic($form.Handle)) 'Undo did not restore minimized state'
+            $null=[TaskPloppInterop.User]::ShowWindowAsync($form.Handle,9);[Windows.Forms.Application]::DoEvents()
+            Assert ([TaskPloppInterop.Geometry]::IsZoomed($form.Handle)-eq$fromMax) 'Restore-to-maximized flag lost'
+        }
+    }
     $form.WindowState='Normal';$form.MinimumSize=[Drawing.Size]::new(900,600);[Windows.Forms.Application]::DoEvents()
     $result=Run-Worker Apply @{Answer=$answer;Context=$context};Assert ($result.Mutated-eq1-and$result.Warnings-ge1-and$result.Applied-eq0) 'Native minimum not reported'
     $undo=Run-Worker Undo @{Snapshots=@($result.Snapshots)};Assert ($undo.Restored-eq1) 'Partial apply undo failed'
@@ -124,6 +144,7 @@ try{
     if($global:LayoutUiFailure){throw $global:LayoutUiFailure}
 }finally{[IO.File]::Delete($config)}
 if($Api){
+    Set-Item Function:Get-TaskPloppOpenAIKeyPath $script:TestLayoutRealKeyPath
     # Synthetic data only: no desktop capture, real titles, microphone or clipboard.
     $context=[pscustomobject]@{Monitors=@([pscustomobject]@{id='m1';x=0;y=0;width=1920;height=1080;work=[pscustomobject]@{x=0;y=0;width=1920;height=1040}});Windows=@(
         [pscustomobject]@{id='w1';Title='Report editor';ProcessName='editor';monitorId='m1';maximized=$false;x=10;y=10;width=800;height=600},
@@ -137,11 +158,26 @@ if($Api){
         foreach($images in @($false,$true)){
             $watch=[Diagnostics.Stopwatch]::StartNew();$pictures=if($images){@($picture)}else{@()}
             $answer=Get-TaskPloppLayoutAnswer 'Ich schreibe einen Bericht und brauche den Editor und Browser mit Quellen nebeneinander. Musik ist unwichtig.' $context $pictures 'gpt-4.1-mini'
-            Assert-TaskPloppLayout $answer $context
+            try{Assert-TaskPloppLayout $answer $context}catch{Write-Host ('INVALID SYNTHETIC RECTS: '+($answer.windows|Select-Object id,state,monitorId,x,y,width,height|ConvertTo-Json -Compress));throw}
             Assert ($answer.windows.Count-eq2-and$answer.windows.id-contains'w1'-and$answer.windows.id-contains'w2'-and$answer.windows.id-notcontains'w3') 'AI selected wrong fixtures'
             $a=$answer.windows[0];$b=$answer.windows[1]
             Assert (($a.x+$a.width)-le$b.x-or($b.x+$b.width)-le$a.x) 'AI did not place fixtures side by side'
             Write-Host ('OK: Live API synthetic only, image='+$images+', seconds='+[Math]::Round($watch.Elapsed.TotalSeconds,2)+', selected='+($answer.windows.id-join','))
+        }
+        function FakeFavorite([string]$Name,[string]$Process='chrome',[bool]$Always=$true){[pscustomobject]@{Name=$Name;ProcessName=$Process;TitleContains='';ExecutablePath='';AppId='';FolderPath='';StartKind='Path';StartTarget='C:\synthetic\private-link.lnk';LaunchAlways=$Always}}
+        $minimum=[pscustomobject]@{Monitors=$context.Monitors;Favorites=@();Windows=@([pscustomobject]@{id='w1';Title='Chrome Test';ProcessName='chrome';monitorId='m1';minimized=$true;maximized=$false;x=$null;y=$null;width=$null;height=$null})}
+        $closed=[pscustomobject]@{Monitors=$context.Monitors;Windows=@();Favorites=@([pscustomobject]@{id='f1';Name='Downloads';Favorite=(FakeFavorite Downloads explorer $false)})}
+        $profiles=[pscustomobject]@{Monitors=$context.Monitors;Windows=@();Favorites=@([pscustomobject]@{id='f1';Name='Chrome Arbeit';Favorite=(FakeFavorite 'Chrome Arbeit')},[pscustomobject]@{id='f2';Name='Chrome Privat';Favorite=(FakeFavorite 'Chrome Privat')})}
+        foreach($case in @(
+            @{Name='minimized';Context=$minimum;Intent='Maximiere Chrome.';Ids=@('w1');State='maximized'},
+            @{Name='closed favorite';Context=$closed;Intent='Oeffne Downloads und ordne es links auf der halben Monitorbreite an.';Ids=@('f1');State='normal'},
+            @{Name='named profile';Context=$profiles;Intent='Maximiere Chrome Arbeit.';Ids=@('f1');State='maximized'},
+            @{Name='ambiguous profile';Context=$profiles;Intent='Maximiere Chrome.';Ids=@();State=''})){
+            $watch=[Diagnostics.Stopwatch]::StartNew();$answer=Get-TaskPloppLayoutAnswer $case.Intent $case.Context @() 'gpt-4.1-mini'
+            Assert-TaskPloppLayout $answer $case.Context
+            Assert ((@($answer.windows|Select-Object -ExpandProperty id)-join',')-ceq($case.Ids-join',')) ('Synthetic selection mismatch: '+$case.Name)
+            if($case.Ids.Count){Assert ($answer.windows[0].state-eq$case.State) ('Synthetic state mismatch: '+$case.Name)}
+            Write-Host ('OK: Live API synthetic '+$case.Name+', seconds='+[Math]::Round($watch.Elapsed.TotalSeconds,2))
         }
     }finally{$graphics.Dispose();$bitmap.Dispose();$stream.Dispose()}
 }

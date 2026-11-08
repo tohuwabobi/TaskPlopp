@@ -10,8 +10,9 @@ try {
     $request=[Console]::In.ReadToEnd()|ConvertFrom-Json
     switch($Mode){
         Plan {
-            $context=Get-TaskPloppLayoutContext $request.ParentProcessId
-            if(-not$context.Windows.Count){throw 'NO_WINDOWS'}
+            $favorites=@();if($request.PSObject.Properties.Name-contains'Favorites'){$favorites=@($request.Favorites)}
+            $context=Get-TaskPloppLayoutContext $request.ParentProcessId $favorites
+            if(-not$context.Windows.Count-and-not$context.Favorites.Count){throw 'NO_WINDOWS'}
             $pictures=@(Get-TaskPloppLayoutPictures $context.Monitors)
             [Console]::WriteLine('CaptureDone')
             $answer=Get-TaskPloppLayoutAnswer $request.Intent $context $pictures $request.Model

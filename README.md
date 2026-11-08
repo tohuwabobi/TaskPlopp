@@ -1,4 +1,4 @@
-﻿# TaskPlopp
+# TaskPlopp
 
 Kleiner lokaler Fensterumschalter fuer Windows PowerShell 5.1 mit Windows Forms.
 Eigener Programm-, Installer- und Testcode besteht aus PowerShell;
@@ -440,7 +440,17 @@ Der Fensterbutton direkt rechts vom Mikrofon startet die Aufnahme des Arbeitszie
 Beispiel: "Ich schreibe einen Bericht und brauche Chrome mit den Quellen neben dem Editor."
 Ein zweiter Klick beendet die Aufnahme. Die gewaehlte lokale Diktat-Engine transkribiert;
 anschliessend plant OpenAI mit Fenstertiteln, Monitorinformationen und Desktopbildern
-die Anordnung. Nur passende sichtbare lokale Fenster werden verschoben/vergroessert.
+die Anordnung. Auch minimierte lokale Fenster werden erkannt und wiederhergestellt.
+Konfigurierte Favoriten koennen bei Bedarf gestartet werden. "Maximiere Chrome"
+maximiert ein eindeutig zuordenbares Fenster wirklich; bei mehreren Profil-Favoriten
+bitte einen unterscheidbaren Namen nennen, etwa "Chrome hspwo.de". Sonst erscheint
+ein Hinweis in der Statusleiste. Startpfade und Startparameter werden nicht an die KI gesendet.
+Favoriten mit "Immer starten" behalten dieses Verhalten (ggf. neues Browserfenster).
+Die Zuordnung eines neuen Fensters erfolgt zeitlich zum Start, ohne Garantie gegen
+gleichzeitig anderweitig gestartete Browserfenster. Bei mehrdeutigen Treffern wird abgebrochen.
+Rueckgaengig stellt vorherige Groesse, Position und Minimierungszustand wieder her.
+Neu gestartete Programme bleiben offen. Scheitert ein spaeterer Start, bleiben schon
+gestartete Programme ebenfalls offen; die eigentliche Anordnung beginnt dann nicht.
 Citrix selbst ist kein Ziel; Programme innerhalb von Citrix sind nicht separat steuerbar.
 Es werden keine Programme gestartet, Fenster geschlossen oder minimiert.
 
@@ -465,9 +475,11 @@ Das normale Mikrofon-Diktat schreibt weiterhin nur Text in die Zwischenablage;
 der Fensterordner veraendert deren Inhalt nicht.
 
 `tests\Test-TaskPloppWindowLayout.ps1` prueft den Vertrag und bewegt nur eigene Testfenster.
-Mit `-Api` kommen zwei echte API-Aufrufe ausschliesslich mit kuenstlichen Inhalten
+Mit `-Api` kommen sechs echte API-Aufrufe ausschliesslich mit kuenstlichen Inhalten
 hinzu (Metadaten allein / mit selbst gezeichnetem Testbild). Reale Desktopbilder
-werden dabei nicht hochgeladen. Siehe `docs/Verifier_2026_11_08_KI_Fensterordner.md`.
+werden dabei nicht hochgeladen. `tests\Test-TaskPloppLayoutFavorites.ps1` prueft
+Starten und Zuordnen mit eigenen Testfenstern und temporaeren Verknuepfungen.
+Siehe `docs/Verifier_2026_11_08_Fensterordner_Favoriten.md`.
 Eine bereits laufende TaskPlopp-Instanz muss zum Laden der neuen Version neu starten.
 
 ## API-Key bequem einrichten
