@@ -3,12 +3,13 @@ function New-TaskPloppMessageBar {
     $panel=[Windows.Forms.Panel]::new()
     [Windows.Forms.Control].GetProperty('DoubleBuffered',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($panel,$true,$null)
     $timer=[Windows.Forms.Timer]::new();$timer.Interval=30
-    $panel.Tag=@{Lines=@('','');Widths=@(0.0,0.0);Offsets=@(0.0,0.0);Activity='';Peaks=[single[]]::new(64);Frame=0;Timer=$timer;HostVisible=$true}
-    $panel | Add-Member ScriptProperty IsScrolling {$this.Tag.Timer.Enabled}
+    $panel.Tag=@{Lines=@('','');Widths=@(0.0,0.0);Offsets=@(0.0,0.0);Activity='';Peaks=[single[]]::new(64);Frame=0;Timer=$timer;HostVisible=$true;ExpireAt=[long]0}
+    $panel | Add-Member ScriptProperty IsScrolling {$this.Tag.Timer.Enabled-and($this.Tag.Widths[0]-gt$this.ClientSize.Width-16-or$this.Tag.Widths[1]-gt$this.ClientSize.Width-16)}
     $panel.ForeColor=[Drawing.Color]::FromArgb(30,30,30)
     $timer.Tag=$panel
     $timer.Add_Tick({param($sender,$eventArgs)
         $p=$sender.Tag;$s=$p.Tag
+        if(Update-TaskPloppMessageTimeout $p){return}
         for($i=0;$i-lt2;$i++){if($s.Widths[$i]-gt$p.ClientSize.Width-16){$s.Offsets[$i]=($s.Offsets[$i]+1.5)%($s.Widths[$i]+48)}}
         $p.Invalidate()
     })
@@ -46,14 +47,22 @@ function Measure-TaskPloppMessage($Panel) {
     $Panel.Height=2*($Panel.Font.Height+6)+4
     $g=$Panel.CreateGraphics()
     try{for($i=0;$i-lt2;$i++){$s.Widths[$i]=$g.MeasureString($s.Lines[$i],$Panel.Font,[int]::MaxValue,[Drawing.StringFormat]::GenericTypographic).Width;$s.Offsets[$i]=0}}finally{$g.Dispose()}
-    $s.Timer.Enabled=$s.HostVisible-and$Panel.Visible-and$Panel.ClientSize.Width-gt16-and($s.Widths[0]-gt$Panel.ClientSize.Width-16-or$s.Widths[1]-gt$Panel.ClientSize.Width-16)
+    $s.Timer.Enabled=$s.HostVisible-and$Panel.Visible-and$Panel.ClientSize.Width-gt16-and($s.ExpireAt-gt0-or$s.Widths[0]-gt$Panel.ClientSize.Width-16-or$s.Widths[1]-gt$Panel.ClientSize.Width-16)
     $Panel.Invalidate()
 }
 function Set-TaskPloppStatusHostVisible([bool]$Visible) {
     $script:MessageBar.Tag.HostVisible=$Visible
     if($Visible){Measure-TaskPloppMessage $script:MessageBar}else{$script:MessageBar.Tag.Timer.Stop()}
 }
-function Set-TaskPloppMessage([string]$Kind,[string]$Summary,[string]$Detail='') {
+function Update-TaskPloppMessageTimeout($Panel) {
+    $s=$Panel.Tag
+    if($s.ExpireAt-le0-or[Diagnostics.Stopwatch]::GetTimestamp()-lt$s.ExpireAt){return $false}
+    $s.ExpireAt=[long]0;$s.Lines=@('','')
+    $Panel.BackColor=if($null-ne$Panel.Parent){$Panel.Parent.BackColor}else{[Drawing.SystemColors]::Control}
+    Measure-TaskPloppMessage $Panel
+    return $true
+}
+function Set-TaskPloppMessage([string]$Kind,[string]$Summary,[string]$Detail='',[int]$Seconds=0) {
     $panels=@()
     foreach($name in 'MessageBar','ConfigurationMessageBar'){
         $panel=Get-Variable $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
@@ -62,6 +71,7 @@ function Set-TaskPloppMessage([string]$Kind,[string]$Summary,[string]$Detail='')
     if($panels.Count-eq0){$script:StartupNotice=($Summary+' '+$Detail).Trim();return}
     foreach($p in $panels){
         $s=$p.Tag;$s.Activity=''
+        $s.ExpireAt=if($Seconds-gt0){[Diagnostics.Stopwatch]::GetTimestamp()+[long]($Seconds*[Diagnostics.Stopwatch]::Frequency)}else{[long]0}
         switch($Kind){
             Success {$prefix='Erfolg';$p.BackColor=[Drawing.Color]::FromArgb(205,239,211)}
             Error {$prefix='Fehler';$p.BackColor=[Drawing.Color]::FromArgb(255,198,198)}

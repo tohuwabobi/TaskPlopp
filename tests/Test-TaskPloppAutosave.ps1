@@ -2,6 +2,7 @@
 $ErrorActionPreference='Stop'
 function Assert([bool]$Value,[string]$Message){if(-not$Value){throw $Message}}
 function Leave($Control){[Windows.Forms.Control].GetMethod('OnLeave',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($Control,[object[]]@([EventArgs]::Empty))|Out-Null}
+function PumpFor([int]$Milliseconds){$watch=[Diagnostics.Stopwatch]::StartNew();while($watch.ElapsedMilliseconds-lt$Milliseconds){[Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 15}}
 $root=Join-Path $env:TEMP ('TaskPlopp-autosave-'+[guid]::NewGuid().ToString('N'))
 $null=[IO.Directory]::CreateDirectory($root);$config=Join-Path $root 'config.json'
 $data=@{ShowOpenWindows=$false;AutoLockEnabled=$false;Programs=@(@{Name='First';ProcessName='fixture1';TitleContains=''},@{Name='Second';ProcessName='fixture2';TitleContains=''})}
@@ -28,7 +29,21 @@ try{
                 Assert ($global:AutoSaveCalls-eq0) 'Opening writes settings'
                 $name=$dialog.Controls.Find('FavoriteName',$true)[0];$name.Text='Renamed'
                 Assert ((Get-Settings).Programs[0].Name-eq'First') 'Text saved during typing'
+                $bar=$dialog.Controls.Find('ConfigurationMessages',$true)[0]
+                Assert ($bar.BackColor.ToArgb()-eq[Drawing.Color]::FromArgb(255,226,163).ToArgb()-and$bar.Tag.Lines[0]-like'*noch nicht gespeichert*') 'Typing leaves stale green success'
                 Leave $name;Assert ((Get-Settings).Programs[0].Name-eq'Renamed') 'Leave did not save'
+                Assert ($bar.Tag.Lines[1]-match'Gespeichert um \d\d:\d\d:\d\d\.\d{3}') 'Repeated saves have no distinct timestamp'
+                PumpFor 2300
+                Assert ($bar.Tag.Lines[0]-eq''-and$bar.BackColor.ToArgb()-eq$bar.Parent.BackColor.ToArgb()) 'Success did not return to existing neutral background'
+                Set-TaskPloppMessage Success 'Temporary fixture success' '' -Seconds 2
+                $name.Text='Pending text'
+                Assert ($bar.Tag.ExpireAt-eq0-and-not(Update-TaskPloppMessageTimeout $bar)-and$bar.Tag.Lines[0]-like'*noch nicht gespeichert*') 'Old success timeout can clear new pending input'
+                Set-TaskPloppMessage Success 'Temporary fixture success' '' -Seconds 2
+                Set-TaskPloppMessage Error 'Fixture error' ''
+                Assert ($bar.Tag.ExpireAt-eq0-and-not(Update-TaskPloppMessageTimeout $bar)-and$bar.BackColor.ToArgb()-eq[Drawing.Color]::FromArgb(255,198,198).ToArgb()) 'Old success timeout clears newer error'
+                Set-TaskPloppActivity Recording
+                Assert ($script:MessageBar.Tag.ExpireAt-eq0-and$script:MessageBar.Tag.Activity-eq'Recording') 'Recording status expires like a save confirmation'
+                $name.Text='Renamed'
                 $count=$global:AutoSaveCalls;Leave $name;Assert ($global:AutoSaveCalls-eq$count) 'Unchanged Leave rewrites'
                 $name.Text='';Leave $name
                 Assert ($name.Text-eq'Renamed'-and(Get-Settings).Programs[0].Name-eq'Renamed') 'Invalid name not restored'

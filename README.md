@@ -537,3 +537,9 @@ Zusaetzliche Tests: `tests\Test-TaskPloppAutosave.ps1`,
 `tests\Test-TaskPloppStructure.ps1` und `tests\Test-TaskPloppKeyboard.ps1`.
 Logitech-Sondertasten sind noch keine neue Produktfunktion; Stand der Discovery
 und Abnahme: `docs/Verifier_2026_11_08_Sofortspeichern_Ordner.md`.
+Beim Bearbeiten eines Textfeldes zeigt die Statusleiste gelb **noch nicht gespeichert**.
+Nach der Uebernahme wird sie fuer zwei Sekunden gruen und nennt den Speicherzeitpunkt;
+danach verwendet sie wieder den normalen GUI-Hintergrund. Eine neue Eingabe ersetzt
+die vorige Erfolgsmeldung sofort. Fehler bleiben rot und werden nicht durch den
+Zeitablauf einer vorherigen Erfolgsmeldung entfernt. Laufende Aufnahmehinweise
+werden durch diese kurze Speicherbestaetigung nicht automatisch beendet.

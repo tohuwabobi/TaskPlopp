@@ -311,7 +311,10 @@ function Show-TaskPloppConfiguration {
             $candidate=ConvertTo-TaskPloppSettings ($script:Settings|ConvertTo-Json -Depth 8|ConvertFrom-Json)
             & $Change $candidate
             $candidate=ConvertTo-TaskPloppSettings $candidate
-            if(($candidate|ConvertTo-Json -Depth 8 -Compress)-ceq($script:Settings|ConvertTo-Json -Depth 8 -Compress)){return}
+            if(($candidate|ConvertTo-Json -Depth 8 -Compress)-ceq($script:Settings|ConvertTo-Json -Depth 8 -Compress)){
+                if($script:ConfigurationMessageBar.Tag.Lines[0]-like'*Eingabe geaendert*'){Set-TaskPloppMessage Notice 'Keine Aenderung' 'Gespeicherter Wert bleibt erhalten.' -Seconds 2}
+                return
+            }
             Save-TaskPloppSettingsWithHotkey $candidate
         }catch{
             $configState.LastError='Aenderung nicht uebernommen. Bisheriger Wert wiederhergestellt. '+$_.Exception.Message
@@ -324,7 +327,7 @@ function Show-TaskPloppConfiguration {
             & $reload $Selection
             Update-TaskPloppTrayText;Apply-TaskPloppIdleSettings
             if($script:HotkeyCleanupWarning){Set-TaskPloppMessage Warning 'Einstellung gespeichert' $script:HotkeyCleanupWarning}
-            else{Set-TaskPloppMessage Success 'Einstellung gespeichert' ''}
+            else{Set-TaskPloppMessage Success 'Einstellung gespeichert' ('Gespeichert um '+[DateTime]::Now.ToString('HH:mm:ss.fff')) -Seconds 2}
         }catch{Set-TaskPloppMessage Warning 'Einstellung gespeichert, Anzeige nicht vollstaendig aktualisiert' 'Die gespeicherte Aenderung bleibt erhalten. Konfiguration erneut oeffnen.'}
     }
     $commitFavorite={
@@ -347,7 +350,14 @@ function Show-TaskPloppConfiguration {
             return
         }
         $keyInput.Clear();$configState.LastError='';$keyState.Text='Lokal eingerichtet (nicht online geprueft).'
-        Set-TaskPloppMessage Success 'API-Key lokal gespeichert' 'Gilt sofort auf diesem PC. Keine Online-Pruefung durchgefuehrt.'
+        Set-TaskPloppMessage Success 'API-Key lokal gespeichert' 'Gilt sofort auf diesem PC. Keine Online-Pruefung durchgefuehrt.' -Seconds 2
+    }
+    foreach($box in @($nameBox,$processBox,$titleBox,$layoutModel,$keyInput)){
+        $box.Add_TextChanged({param($sender,$eventArgs)
+            if($configState.Loading){return}
+            if($sender.Name-eq'OpenAIKey'-and-not$sender.Text){Set-TaskPloppMessage Notice 'Kein neuer API-Key' 'Vorhandener Key bleibt erhalten.' -Seconds 2}
+            else{Set-TaskPloppMessage Notice 'Eingabe geaendert - noch nicht gespeichert' 'Wird beim Verlassen des Feldes oder Schliessen gespeichert.'}
+        })
     }
     foreach($box in @($nameBox,$processBox,$titleBox)){$box.Add_Leave($commitFavorite)}
     $layoutModel.Add_Leave({$value=$layoutModel.Text.Trim();& $commit {param($c)$c.WindowLayoutModel=$value}})

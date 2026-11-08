@@ -37,3 +37,18 @@ Auf GANDALF nach vollstaendiger Synchronisation ueber vorhandenen Desktoplink st
 https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey
 https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
 https://hub.sync.logitech.com/options/post/programming-buttons-and-keys-in-options-ntwM6VsAEKhHACY
+## Rueckmeldung und Korrektur der Statusanzeige
+Tobias bestaetigt Leertaste und aufgeraeumte Ordner; Sofortspeichern scheint zu funktionieren.
+Befund: dauerhafte gruene Erfolgsmeldung unterscheidet nachfolgende Eingaben nicht.
+Korrektur: Benutzer-TextChanged bei nicht ladender Konfiguration zeigt gelb den noch
+nicht gespeicherten Textzustand. Config-Save/Key-Save zeigen fuer zwei Sekunden gruen,
+bei normalen Settings mit eindeutigem Speicherzeitpunkt. Danach neutraler vorhandener
+GUI-Hintergrund. Kein neuer Timer: vorhandenen Status-Timer mit optionaler Ablaufzeit
+verwenden; neue Meldungen ersetzen/entfernen die alte Ablaufzeit. Fehler/Warnungen und
+Aufnahme werden nicht automatisch ausgeblendet. Andere Meldungen bleiben unveraendert.
+Tests: echter Timerablauf mit GUI-Pump, Eingabe ersetzt Gruen, pending/error ersetzen
+vorigen Erfolg ohne spaeteres Loeschen, Recording ohne Save-Ablauf. Autosave-, Layout-,
+Audio-GUI-, Diktat-GUI- und KeyAndWindow-Regressionen bestanden. Keine neuen Farben
+oder Popups. Physische Escape-Eingabe im Audio-Test mangels aktivem Desktop SKIP;
+Rueckkehr ueber Button geprueft. Neue Statusrueckmeldung noch mit Tobias nach Neustart
+praktisch pruefen. Daten- und Speicherverhalten ansonsten unveraendert.
