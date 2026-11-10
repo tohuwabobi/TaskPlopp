@@ -196,6 +196,8 @@ Das Zahnrad öffnet Einstellungen und sortierbare Favoriten. Änderungen werden 
             $index=[regex]::Match($help.Text,('(?m)^'+[regex]::Escape($heading)+'\r?$')).Index
             $help.Select($index,$heading.Length);$help.SelectionFont=$bold
         }
+        $shortcut='Strg+NumPad0';$index=$help.Text.IndexOf($shortcut,[StringComparison]::Ordinal)
+        $help.Select($index,$shortcut.Length);$help.SelectionFont=$bold
         $help.Select(0,0)
     }finally{$bold.Dispose()}
     Update-TaskPloppContentLayout
