@@ -66,6 +66,15 @@ try{
             $help=$sender.Controls.Find('HelpText',$true)[0]
             Assert ($sender.HelpView-and-not$bar.Visible-and$top.GetRowHeights()[1]-eq0-and[Windows.Forms.Application]::OpenForms.Count-eq$formCount) 'Help is popup or status retains space'
             Assert ($help.Text-like'*Strg+NumPad0*'-and$help.ReadOnly-and$help.Font.Size-eq$sender.Font.Size) 'Help lacks active hotkey or font'
+            foreach($heading in @('TaskPlopp – deine lokalen Programme griffbereit','TaskPlopp öffnen','Minimieren und Schließen','Favoriten und Fenster','Audio und PC-Sperre','Diktat','KI-Fensterordner','Konfiguration')){
+                $match=[regex]::Match($help.Text,('(?m)^'+[regex]::Escape($heading)+'\r?$'))
+                Assert $match.Success ('Heading missing: '+$heading)
+                $help.Select($match.Index,$heading.Length)
+                Assert ($null-ne$help.SelectionFont-and$help.SelectionFont.Bold-and$help.SelectionFont.Size-eq$sender.Font.Size) ('Help heading not bold after display: '+$heading)
+            }
+            $body='TaskPlopp hilft dir';$help.Select($help.Text.IndexOf($body),$body.Length)
+            Assert (-not$help.SelectionFont.Bold) 'Help body became bold'
+            $help.Select(0,0)
             $helpBounds=Client-Bounds $help $sender;$toolbarBounds=Client-Bounds $toolbar $sender
             Assert ($helpBounds.Top-eq$toolbarBounds.Bottom+$content.Padding.Top-and$helpBounds.Bottom-eq$sender.ClientSize.Height-$content.Padding.Bottom) 'Help does not fill whole content below toolbar'
             Assert ($sender.SelectionButtons.Count-eq0) 'Help retains favorite keys'

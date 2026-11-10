@@ -189,6 +189,7 @@ Fenster-Symbol neben dem Mikrofon anklicken. Diktiere ins Mikro, wie die Fenster
 Konfiguration
 Das Zahnrad öffnet Einstellungen und sortierbare Favoriten. Änderungen werden sofort gespeichert. Unter Tastenkombination auf Aufnahme klicken und die gewünschte Kombination drücken. Rechtsklick aufs Zahnrad: Konfiguration sichern oder übertragen. API-Keys werden pro PC eingerichtet.
 '@
+    $script:ListPanel.Controls.Add($help)
     $bold=[Drawing.Font]::new($help.Font,[Drawing.FontStyle]::Bold)
     try{
         foreach($heading in @('TaskPlopp – deine lokalen Programme griffbereit','TaskPlopp öffnen','Minimieren und Schließen','Favoriten und Fenster','Audio und PC-Sperre','Diktat','KI-Fensterordner','Konfiguration')){
@@ -197,7 +198,6 @@ Das Zahnrad öffnet Einstellungen und sortierbare Favoriten. Änderungen werden 
         }
         $help.Select(0,0)
     }finally{$bold.Dispose()}
-    $script:ListPanel.Controls.Add($help)
     Update-TaskPloppContentLayout
 }
 function Update-TaskPloppAudioView {
