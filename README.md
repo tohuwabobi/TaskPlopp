@@ -591,8 +591,8 @@ und Konfigurationsrueckkehr belassen die Hilfe; der globale Hotkey zeigt wie bis
 die Tasks. In kleinen Fenstern scrollt der Hilfetext vertikal.
 
 Fuer neue Konfigurationen gilt **Strg+NumPad0** (0 auf dem Ziffernblock). Gespeicherte
-individuelle Kombinationen bleiben erhalten. Die Hilfe nennt auch deinen aktuell
-eingerichteten Hotkey. Den echten Aufruf mit NumLock an/aus und in Citrix testen;
+individuelle Kombinationen bleiben erhalten. Die Hilfe beschreibt den Standard
+und die Moeglichkeit, ihn zu aendern. Den echten Aufruf mit NumLock an/aus und in Citrix testen;
 Windows kann bei ausgeschaltetem NumLock eine andere Taste melden.
 
 ## Passende Startgroesse

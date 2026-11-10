@@ -163,35 +163,40 @@ function Show-TaskPloppHelp {
     $help=[Windows.Forms.RichTextBox]::new();$help.Name='HelpText';$help.ReadOnly=$true
     $help.Margin=[Windows.Forms.Padding]::new(0);$help.BorderStyle='None';$help.BackColor=$script:Main.BackColor;$help.ForeColor=$script:Main.ForeColor
     $help.DetectUrls=$false;$help.WordWrap=$true;$help.ScrollBars='Vertical'
-    $key=(Get-TaskPloppHotkeySpec $script:Settings).Label
-    $help.Text=@"
+    $help.Text=@'
 TaskPlopp – deine lokalen Programme griffbereit
 
-TaskPlopp hilft dir, auch aus Citrix heraus zu lokalen Fenstern und Werkzeugen zu wechseln.
+TaskPlopp hilft dir, aus Citrix heraus zu lokalen Fenstern und Werkzeugen zu wechseln.
 
-Öffnen: $key
-Neuer Standard: Strg+NumPad0 (die 0 auf dem Ziffernblock).
+TaskPlopp öffnen
+Nutze die Tastenkombination Strg+NumPad0. In der Konfiguration kann eine andere Kombination eingestellt werden.
+
+Minimieren und Schließen
+Drücke Leertaste - TaskPlopp verschwindet in die Taskleiste. X blendet es neben der Uhr aus; dort kannst du es ganz beenden. Beim Programmwechsel verhält es sich wie ein normales Fenster; der Hotkey holt es wieder nach vorne.
 
 Favoriten und Fenster
-Einen Button anklicken oder 1–9, 0, danach A–Z drücken. Favoriten starten bei Bedarf ihr Programm. Weitere Fenster zeigt laufende lokale Anwendungen. Citrix minimiert das Citrix-Fenster.
+Einen Button anklicken oder 1–9, 0, A–Z drücken. Favoriten starten bei Bedarf ihr Programm. Weitere Fenster zeigt laufende lokale Anwendungen. Citrix minimiert das Citrix-Fenster.
 
 Audio und PC-Sperre
-Unter Audio Mikrofon oder Lautsprecher wählen. Das Schloss schaltet die automatische PC-Sperre um; die Wartezeit stellst du im Zahnrad ein.
+Unter Audio kannst du Mikrofon und Lautsprecher wählen. Das Schloss schaltet die automatische PC-Sperre um.
 
 Diktat
 Mikrofon anklicken, sprechen, erneut klicken. Die ausgewählte lokale Engine transkribiert; der Text landet in der Zwischenablage. Mit Strg+V einfügen. Die Engine wählst du in der Konfiguration.
 
 KI-Fensterordner
-Fenster-Symbol neben dem Mikrofon anklicken, Arbeitsziel sprechen, erneut klicken. OpenAI plant die Anordnung aus Auftrag, Fenstertiteln und Bildschirmbildern. Benenne Favoriten und Chrome-Profile eindeutig. Rechtsklick auf das Symbol: letzte Anordnung rückgängig. Neu gestartete Programme bleiben offen.
+Fenster-Symbol neben dem Mikrofon anklicken. Diktiere ins Mikro, wie die Fenster auf dem Desktop angeordnet werden sollen. Fenster-Symbol erneut klicken. OpenAI plant die Anordnung aus Auftrag, Fenstertiteln und Bildschirmbildern. Benenne Favoriten und Chrome-Profile eindeutig. Rechtsklick auf das Symbol: letzte Anordnung rückgängig. Neu gestartete Programme bleiben offen.
 
 Konfiguration
 Das Zahnrad öffnet Einstellungen und sortierbare Favoriten. Änderungen werden sofort gespeichert. Unter Tastenkombination auf Aufnahme klicken und die gewünschte Kombination drücken. Rechtsklick aufs Zahnrad: Konfiguration sichern oder übertragen. API-Keys werden pro PC eingerichtet.
-
-Minimieren und Schließen
-Leertaste oder Minimieren legt TaskPlopp in die Taskleiste. X blendet es neben der Uhr aus; dort kannst du es ganz beenden. Beim Programmwechsel verhält es sich wie ein normales Fenster; der Hotkey holt es wieder nach vorne.
-
-Zurück-Pfeil oder Escape beendet diese Hilfe und zeigt die vorherige Ansicht.
-"@
+'@
+    $bold=[Drawing.Font]::new($help.Font,[Drawing.FontStyle]::Bold)
+    try{
+        foreach($heading in @('TaskPlopp – deine lokalen Programme griffbereit','TaskPlopp öffnen','Minimieren und Schließen','Favoriten und Fenster','Audio und PC-Sperre','Diktat','KI-Fensterordner','Konfiguration')){
+            $index=[regex]::Match($help.Text,('(?m)^'+[regex]::Escape($heading)+'\r?$')).Index
+            $help.Select($index,$heading.Length);$help.SelectionFont=$bold
+        }
+        $help.Select(0,0)
+    }finally{$bold.Dispose()}
     $script:ListPanel.Controls.Add($help)
     Update-TaskPloppContentLayout
 }
