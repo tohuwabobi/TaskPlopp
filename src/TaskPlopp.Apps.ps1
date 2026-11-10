@@ -8,10 +8,10 @@ function ConvertTo-TaskPloppSettings($Data) {
     if($Data.PSObject.Properties.Name -notcontains 'WindowLayoutModel'){$Data|Add-Member NoteProperty WindowLayoutModel 'gpt-4.1-mini'}
     if($Data.WindowLayoutModel-isnot[string]-or$Data.WindowLayoutModel-cnotmatch'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$'){throw 'Fensterordner: Bitte einen gueltigen OpenAI-Modellnamen eintragen.'}
     if($Data.PSObject.Properties.Name -notcontains 'HotkeyModifiers') {
-        $Data | Add-Member -NotePropertyName HotkeyModifiers -NotePropertyValue 3
+        $Data | Add-Member -NotePropertyName HotkeyModifiers -NotePropertyValue 2
     }
     if($Data.PSObject.Properties.Name -notcontains 'HotkeyKey') {
-        $Data | Add-Member -NotePropertyName HotkeyKey -NotePropertyValue 'F10'
+        $Data | Add-Member -NotePropertyName HotkeyKey -NotePropertyValue 'NumPad0'
     }
     if(($Data.HotkeyModifiers -isnot [int] -and $Data.HotkeyModifiers -isnot [long]) -or $Data.HotkeyModifiers -lt 0 -or $Data.HotkeyModifiers -gt 15) {
         throw 'Tastenkombination: Ungueltige Zusatztasten.'

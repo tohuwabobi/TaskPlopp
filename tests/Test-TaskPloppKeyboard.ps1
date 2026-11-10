@@ -72,6 +72,11 @@ try {
     Assert ($script:BackCount -eq 1) 'Zurueck-Ereignis fehlt.'
     $form.AudioView=$false
     Assert (-not $form.TrySelectKey([Windows.Forms.Keys]::Escape)) 'Taskansicht faengt Escape ungefragt ab.'
+    $script:HelpReturnView='Audio';$form.HelpView=$true;$before=$script:ClickedIndex
+    foreach($key in @([Windows.Forms.Keys]::D1,[Windows.Forms.Keys]::D0,[Windows.Forms.Keys]::A)){Assert (-not$form.TrySelectKey($key)) 'Help runs favorite selection'}
+    Assert ($script:ClickedIndex-eq$before) 'Help executed a task'
+    Assert ($form.TrySelectKey([Windows.Forms.Keys]::Escape)-and$script:BackCount-eq2) 'Help Escape did not return'
+    $form.HelpView=$false
     $script:SpaceMinimized=0
     function Minimize-TaskPlopp {$script:SpaceMinimized++;$form.WindowState='Minimized'}
     $replacement.Focus()|Out-Null;$script:ClickedIndex=-1

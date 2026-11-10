@@ -33,7 +33,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\CodexProjekte\TaskPlo
 ```
 
 Die Desktop-Verknuepfung startet TaskPlopp und aktiviert die gespeicherte globale
-Tastenkombination, standardmaessig **Strg+Alt+F10**.
+Tastenkombination, standardmaessig **Strg+NumPad0**.
 Der Hotkey bleibt nach dem Schliessen der GUI aktiv, solange das TaskPlopp-Symbol
 im Infobereich laeuft. Rechtsklick darauf: **TaskPlopp beenden**. Nach der naechsten
 Windows-Anmeldung einmal die Desktop-Verknuepfung starten. Kein Autostart.
@@ -143,7 +143,7 @@ beide Ueberwachungen gleichzeitig betreiben.
 
 ### Fenster und Favoriten bedienen
 
-- Die konfigurierte Kombination (Standard **Strg+Alt+F10**) oeffnet TaskPlopp. Danach waehlen **1 bis 9**, **0**, anschliessend
+- Die konfigurierte Kombination (Standard **Strg+NumPad0**) oeffnet TaskPlopp. Danach waehlen **1 bis 9**, **0**, anschliessend
   **A bis Z** den entsprechend beschrifteten Programm-/Fensterbutton direkt aus.
   Die Zahlen funktionieren auch auf dem Ziffernblock (Num an). Fuer Buchstaben
   ist keine Umschalttaste noetig. Der Tastendruck fuehrt denselben Wechsel oder
@@ -233,7 +233,7 @@ die generischen Chrome-/Explorer-Favoriten und setzt deren vereinbarte Reihenfol
 ### Vollbild und Fokus
 
 Der Hotkey wird vom lokalen TaskPlopp-Hotkey-Prozess registriert. Citrix kann Tastenkombinationen
-im Vollbild an die entfernte Sitzung weiterreichen. Daher Strg+Alt+F10 in der
+im Vollbild an die entfernte Sitzung weiterreichen. Daher Strg+NumPad0 in der
 tatsaechlichen Sitzung ausprobieren. Funktioniert der Hotkey nur lokal, muss die
 lokale Tastenweiterleitung in Citrix mit der IT abgestimmt oder zuerst ueber die
 Citrix-Leiste zum lokalen Desktop gewechselt werden. TaskPlopp veraendert keine
@@ -580,3 +580,17 @@ zaehlen weiterhin zu TaskPlopp; ein Wiederaufruf aktiviert den bereits offenen D
 Minimieren/Leertaste behalten den Taskleisteneintrag, X blendet in den Infobereich aus.
 Kein neuer Schalter und keine automatische Citrix-Erkennung. Windows kann Aktivierung
 beschraenken; den Aufruf und Wechsel im echten Citrix-Vollbild vor Ort pruefen.
+
+## Hilfe im Programm
+
+Oben rechts oeffnet **?** eine kurze Beschreibung aller Funktionen. Die Hilfe nutzt
+die gesamte Flaeche unter der Toolbar; Favoriten/Audio und Statusleiste sind dabei
+ausgeblendet. **Zurueck-Pfeil oder Escape** bringt dich zur vorherigen Ansicht.
+Laufende Aufnahmen und Auftraege werden dadurch nicht abgebrochen. Aktualisieren
+und Konfigurationsrueckkehr belassen die Hilfe; der globale Hotkey zeigt wie bisher
+die Tasks. In kleinen Fenstern scrollt der Hilfetext vertikal.
+
+Fuer neue Konfigurationen gilt **Strg+NumPad0** (0 auf dem Ziffernblock). Gespeicherte
+individuelle Kombinationen bleiben erhalten. Die Hilfe nennt auch deinen aktuell
+eingerichteten Hotkey. Den echten Aufruf mit NumLock an/aus und in Citrix testen;
+Windows kann bei ausgeschaltetem NumLock eine andere Taste melden.

@@ -1,5 +1,7 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot '..\src\TaskPlopp.Native.ps1')
+$null=[TaskPloppInterop.Geometry]::SetThreadDpiAwarenessContext([IntPtr](-4))
 function Complete-TextEdit($Control){[Windows.Forms.Control].GetMethod('OnLeave',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($Control,[object[]]@([EventArgs]::Empty))|Out-Null}
 function Assert([bool]$Value,[string]$Message){if(-not$Value){throw $Message}}
 function Client-Bounds($Control,$Form){$point=$Form.PointToClient($Control.PointToScreen([Drawing.Point]::Empty));[Drawing.Rectangle]::new($point,$Control.Size)}
@@ -20,7 +22,7 @@ try{
             $content=$sender.Controls.Find('TaskContent',$true)[0]
             $left=$sender.Controls.Find('ToolbarLeft',$true)[0];$right=$sender.Controls.Find('ToolbarRight',$true)[0]
             Assert (($left.Controls.Name-join',')-eq'CitrixButton,AudioToggle,AutoLockToggle,DictationToggle,WindowLayoutToggle') 'Linke Toolbargruppe falsch'
-            Assert (($right.Controls.Name-join',')-eq'RefreshButton,ConfigurationButton') 'Rechte Toolbargruppe falsch'
+            Assert (($right.Controls.Name-join',')-eq'HelpButton,RefreshButton,ConfigurationButton') 'Rechte Toolbargruppe falsch'
             foreach($case in @(@(760,1200,10,3),@(420,350,10,30),@(420,350,15,30),@(420,350,15,0),@(760,1200,10,3))){
                 $sender.Font=[Drawing.Font]::new('Segoe UI',$case[2]);$sender.Size=[Drawing.Size]::new($case[0],$case[1])
                 $script:Settings.Programs=@($script:LayoutPrograms|Select-Object -First $case[3]);Update-WindowList
@@ -36,12 +38,75 @@ try{
                 $toolbarButtons=@($left.Controls)+@($right.Controls)
                 $rects=@($toolbarButtons|ForEach-Object{Client-Bounds $_ $sender})
                 Assert (@($rects.Top|Select-Object -Unique).Count-eq1) 'Toolbar bricht um'
-                Assert ($rects[0].Left-eq10-and$rects[6].Right-eq$sender.ClientSize.Width-10) 'Toolbar falsch ausgerichtet'
+                Assert ($rects[0].Left-eq10-and$rects[-1].Right-eq$sender.ClientSize.Width-10) 'Toolbar falsch ausgerichtet'
                 Assert ($rects[5].Left-$rects[4].Right-ge12) 'Toolbargruppen ueberlappen'
+                Assert (@($rects|Where-Object {$_.Left-lt0-or$_.Right-gt$sender.ClientSize.Width}).Count-eq0) 'Toolbarbutton ausserhalb des Fensters'
                 $top=$sender.Controls.Find('TopArea',$true)[0];$toolbar=$sender.Controls.Find('Toolbar',$true)[0]
                 Assert ($bar.Top-$toolbar.Bottom-eq3-and$top.ClientSize.Height-$bar.Bottom-eq3) 'Statusrahmen fehlt'
                 Write-Host "OK: Layout $($case[0])x$($case[1]), Font $($case[2]), $($case[3]) Favoriten, Inset $expected."
             }
+            function Get-TaskPloppAudioDevices {param($Flow) @()}
+            function Get-TaskPloppAudioDefaults {param($Flow) @()}
+            function Get-TaskPloppOpenAIKeyPath {Join-Path $env:TEMP ('TaskPlopp-unconfigured-key-test-'+$PID+'.dpapi')}
+            function Pump-Help {for($i=0;$i-lt4;$i++){[Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 15}}
+            function Press-HelpEscape {
+                $e=[Windows.Forms.KeyEventArgs]::new([Windows.Forms.Keys]::Escape)
+                [Windows.Forms.Control].GetMethod('OnKeyDown',[Reflection.BindingFlags]'Instance,NonPublic').Invoke($script:Main,[object[]]@($e))|Out-Null
+                Assert $e.Handled 'Help Escape not handled'
+            }
+            $sender.Font=[Drawing.Font]::new('Segoe UI',15);$sender.Size=[Drawing.Size]::new(760,900)
+            $helpButton=$sender.Controls.Find('HelpButton',$true)[0]
+            $top=$sender.Controls.Find('TopArea',$true)[0];$toolbar=$sender.Controls.Find('Toolbar',$true)[0]
+            Set-TaskPloppMessage Warning 'Keep while reading help' 'Fixture detail'
+            $formCount=[Windows.Forms.Application]::OpenForms.Count
+            $helpButton.PerformClick();Pump-Help
+            $help=$sender.Controls.Find('HelpText',$true)[0]
+            Assert ($sender.HelpView-and-not$bar.Visible-and$top.GetRowHeights()[1]-eq0-and[Windows.Forms.Application]::OpenForms.Count-eq$formCount) 'Help is popup or status retains space'
+            Assert ($help.Text-like'*Strg+NumPad0*'-and$help.ReadOnly-and$help.Font.Size-eq$sender.Font.Size) 'Help lacks active hotkey or font'
+            $helpBounds=Client-Bounds $help $sender;$toolbarBounds=Client-Bounds $toolbar $sender
+            Assert ($helpBounds.Top-eq$toolbarBounds.Bottom+$content.Padding.Top-and$helpBounds.Bottom-eq$sender.ClientSize.Height-$content.Padding.Bottom) 'Help does not fill whole content below toolbar'
+            Assert ($sender.SelectionButtons.Count-eq0) 'Help retains favorite keys'
+            $script:RefreshButton.PerformClick();Update-WindowList;Update-TaskPloppAudioView;Pump-Help
+            Assert ($sender.Controls.Find('HelpText',$true).Count-eq1-and$bar.Tag.Lines[0]-like'*Keep while reading*') 'Refresh/renderer replaces help or clears hidden status'
+            Show-TaskPloppConfiguration -OnShown {param($dialog,$args) $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()}
+            Assert ($script:CurrentView-eq'Help'-and$sender.Controls.Find('HelpText',$true).Count-eq1) 'Configuration return lost help'
+            $sender.Activate();Raise-TaskPloppWindow $sender.Handle;Pump-Help
+            Assert ([Windows.Forms.Form]::ActiveForm-eq$sender) 'Test requires active Main for Help Escape'
+            $script:CancelFromHelp=0
+            function Cancel-TaskPloppWindowLayout {$script:CancelFromHelp++}
+            $script:LayoutJob=[pscustomobject]@{Fixture=$true};$jobBefore=$script:LayoutJob
+            try{
+                Press-HelpEscape
+                Assert ($script:CurrentView-eq'Tasks'-and[object]::ReferenceEquals($jobBefore,$script:LayoutJob)-and$script:CancelFromHelp-eq0) 'Help Escape cancelled worker'
+            }finally{$script:LayoutJob=$null}
+            Pump-Help
+            Assert ($bar.Visible-and$top.GetRowHeights()[1]-gt0) 'Return did not restore status space'
+            Show-TaskPloppView Audio
+            Set-TaskPloppActivity Recording;$bar.Tag.Peaks[4]=0.4
+            $helpButton.PerformClick();Pump-Help;$helpButton.PerformClick();Pump-Help
+            Assert ($script:CurrentView-eq'Audio'-and$bar.Tag.Activity-eq'Recording'-and$bar.Tag.Peaks[4]-gt0.3) 'Help->Audio erased recording activity/peaks'
+            $helpButton.PerformClick();Set-TaskPloppMessage Success 'Result received during help' 'Keep this';$helpButton.PerformClick()
+            Assert ($bar.Tag.Lines[0]-like'*Result received*') 'Audio ready notice replaces result from help'
+            $helpButton.PerformClick();Set-TaskPloppMessage Success 'Expired while reading' '' -Seconds 2;$bar.Tag.ExpireAt=[long]1
+            $helpButton.PerformClick()
+            Assert ($bar.Tag.Lines[0]-eq''-and$bar.Tag.ExpireAt-eq0) 'Expired status flashes again on return'
+            $helpButton.PerformClick();$script:AudioButton.PerformClick()
+            Assert ($script:CurrentView-eq'Audio'-and$bar.Visible) 'Audio button cannot leave help'
+            $helpButton.PerformClick();Show-TaskPlopp;Pump-Help
+            Assert ($script:CurrentView-eq'Tasks'-and$bar.Visible) 'Global reopen retains help'
+            $helpButton.PerformClick();Pump-Help
+            $area=[Windows.Forms.Screen]::FromControl($sender).WorkingArea
+            $sender.Location=[Drawing.Point]::new(($area.X+20),($area.Y+20))
+            $sender.Activate();$sender.Refresh();Pump-Help
+            if([TaskPloppInterop.User]::GetForegroundWindow()-eq$sender.Handle-and$area.Contains((Get-TaskPloppLayoutRect $sender.Handle -Raw))){
+                $capture=[Drawing.Bitmap]::new($sender.ClientSize.Width,$sender.ClientSize.Height);$g=[Drawing.Graphics]::FromImage($capture)
+                try{$g.CopyFromScreen($sender.PointToScreen([Drawing.Point]::Empty),[Drawing.Point]::Empty,$sender.ClientSize);$capture.Save((Join-Path $env:TEMP 'TaskPlopp-help-screen.png'))}finally{$g.Dispose();$capture.Dispose()}
+            }
+            $sender.Size=$sender.MinimumSize;Pump-Help
+            $help=$sender.Controls.Find('HelpText',$true)[0];$helpBounds=Client-Bounds $help $sender
+            Assert ($helpBounds.Right-le$sender.ClientSize.Width-and$helpBounds.Bottom-le$sender.ClientSize.Height-and-not$content.HorizontalScroll.Visible) 'Help clipped at minimum size'
+            $helpButton.PerformClick();$sender.Size=[Drawing.Size]::new(760,900);Pump-Help
+            Write-Host 'OK: Full-window help, preserved status/activity, two Escape handlers, config/refresh/audio/global navigation, minimum toolbar width.'
             $sender.Controls.Find('CitrixButton',$true)[0].PerformClick()
             $bitmap=[Drawing.Bitmap]::new($sender.Width,$sender.Height)
             try{$sender.DrawToBitmap($bitmap,[Drawing.Rectangle]::new(0,0,$sender.Width,$sender.Height));$bitmap.Save((Join-Path $env:TEMP 'TaskPlopp-layout-frame.png'))}finally{$bitmap.Dispose()}

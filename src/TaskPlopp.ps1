@@ -140,6 +140,7 @@ try {
     $script:ExitRequested = $false
     $script:HotkeysEnabled=-not $SmokeTest -and -not $ResidentTest
     $script:CurrentView = 'Tasks'
+    $script:HelpReturnView = 'Tasks'
     $script:IdleState=New-TaskPloppIdleState $script:Settings.AutoLockEnabled $script:Settings.AutoLockMinutes
     $script:Main.Add_FormClosing({ param($sender, $eventArgs)
         if($null-ne$script:LayoutJob-and$script:LayoutMode-ne'Plan'){$eventArgs.Cancel=$true;$script:LayoutClosePending=$true;Set-TaskPloppMessage Notice 'Anordnung wird abgeschlossen' 'TaskPlopp schliesst danach.';return}
@@ -344,6 +345,7 @@ try {
     }
 
     function Update-WindowList {
+        if($script:CurrentView-eq'Help'){return}
         $script:ListPanel.SuspendLayout()
         try {
             $script:Main.ClearSelectionButtons()
@@ -363,7 +365,11 @@ try {
         } finally { $script:ListPanel.ResumeLayout() }
     }
 
-    $script:RefreshButton = Add-ToolbarButton ([string][char]0xE72C) { if($null-eq$script:LayoutJob-and$null-eq$script:DictationInstaller){Clear-TaskPloppMessage}; Show-TaskPloppView } -Hint 'Aktuelle Ansicht aktualisieren' -Icon -Right
+    $script:HelpButton=Add-ToolbarButton '?' {
+        if($script:CurrentView-eq'Help'){Show-TaskPloppView $script:HelpReturnView}else{Show-TaskPloppView 'Help'}
+    } -Hint 'Hilfe: Programmbeschreibung und Bedienung' -Icon -Right
+    $script:HelpButton.Name='HelpButton';$script:HelpButton.Font=$script:Main.Font
+    $script:RefreshButton = Add-ToolbarButton ([string][char]0xE72C) { if($script:CurrentView-ne'Help'-and$null-eq$script:LayoutJob-and$null-eq$script:DictationInstaller){Clear-TaskPloppMessage}; Show-TaskPloppView } -Hint 'Aktuelle Ansicht aktualisieren' -Icon -Right
     $script:RefreshButton.Name='RefreshButton'
     $script:ConfigurationButton = Add-ToolbarButton ([string][char]0xE713) { Show-TaskPloppConfiguration } -Hint 'Konfiguration oeffnen (Rechtsklick: sichern/uebertragen)' -Icon -Right
     $script:ConfigurationButton.Name='ConfigurationButton'
@@ -417,13 +423,17 @@ try {
     $layoutCancelItem.Add_Click({Cancel-TaskPloppWindowLayout})
     $layoutMenu.Add_Opening({$layoutUndoItem.Enabled=$script:LayoutUndo.Count-gt0-and$null-eq$script:LayoutJob;$layoutCancelItem.Enabled=($script:LayoutMode-eq'Plan'-or($script:DictationPurpose-eq'Layout'-and$script:DictationPhase-ne'Ready'))})
     $script:LayoutButton.ContextMenuStrip=$layoutMenu
-    $script:Main.Add_KeyDown({param($sender,$e) if($e.KeyCode-eq[Windows.Forms.Keys]::Escape-and($null-ne$script:LayoutJob-or($script:DictationPurpose-eq'Layout'-and$script:DictationPhase-ne'Ready'))){Cancel-TaskPloppWindowLayout;$e.Handled=$true;$e.SuppressKeyPress=$true}})
+    $script:Main.Add_KeyDown({param($sender,$e) if(-not$e.Handled-and$e.KeyCode-eq[Windows.Forms.Keys]::Escape-and($null-ne$script:LayoutJob-or($script:DictationPurpose-eq'Layout'-and$script:DictationPhase-ne'Ready'))){Cancel-TaskPloppWindowLayout;$e.Handled=$true;$e.SuppressKeyPress=$true}})
     Update-TaskPloppLayoutButton
     $script:UpdatingContentLayout=$false
     function Update-TaskPloppContentLayout {
         if($script:UpdatingContentLayout){return}
         $script:UpdatingContentLayout=$true
         try{
+            $toolbarWidth=$toolbar.Padding.Horizontal+$toolbarLeft.Margin.Horizontal+$toolbarRight.Margin.Horizontal
+            foreach($button in @($toolbarLeft.Controls)+@($toolbarRight.Controls)){$toolbarWidth+=$button.Width+$button.Margin.Horizontal}
+            $minimumWidth=[Math]::Max(460,$toolbarWidth+$script:Main.Width-$script:Main.ClientSize.Width)
+            if($script:Main.MinimumSize.Width-ne$minimumWidth){$script:Main.MinimumSize=[Drawing.Size]::new($minimumWidth,$script:Main.MinimumSize.Height)}
             $inset=$script:ContentInset
             $scroll=if($script:CurrentView-eq'Tasks'-and$script:ListPanel.VerticalScroll.Visible){[Windows.Forms.SystemInformation]::VerticalScrollBarWidth}else{0}
             $padding=[Windows.Forms.Padding]::new($inset+$scroll,10,$inset,10)
@@ -438,7 +448,7 @@ try {
                         $height=[Math]::Max(48,2*$script:Main.Font.Height+8);if($control.Height-ne$height){$control.Height=$height}
                     }
                     elseif($control-is[Windows.Forms.Label]){$maximum=[Drawing.Size]::new($width,0);if($control.MaximumSize-ne$maximum){$control.MaximumSize=$maximum}}
-                }elseif($control.Name-eq'AudioColumns'){
+                }elseif($control.Name-in@('AudioColumns','HelpText')){
                     $size=[Drawing.Size]::new($width,[Math]::Max(1,$script:ListPanel.ClientSize.Height-$script:ListPanel.Padding.Vertical))
                     if($control.Size-ne$size){$control.Size=$size}
                 }

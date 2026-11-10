@@ -131,19 +131,73 @@ function Clear-TaskPloppContent {
     $script:Main.ClearSelectionButtons()
     while ($script:ListPanel.Controls.Count -gt 0) { $script:ListPanel.Controls[0].Dispose() }
 }
-function Show-TaskPloppView([ValidateSet('Tasks','Audio')][string]$View = $script:CurrentView) {
-    $script:CurrentView = $View
-    $script:Main.AudioView = ($View -eq 'Audio')
-    $script:ListPanel.AutoScroll = ($View -eq 'Tasks')
-    $script:AudioButton.Text = if ($View -eq 'Audio') { [string][char]0xE72B } else { 'Audio' }
-    $script:AudioButton.Font = if ($View -eq 'Audio') { $script:ToolbarIconFont } else { $script:Main.Font }
-    $hint=if($View -eq 'Audio') { 'Zurueck zu Tasks (Escape)' } else { 'Lautsprecher und Mikrofone auswaehlen' }
-    $script:AudioButton.AccessibleName=$hint
-    $script:ToolbarToolTip.SetToolTip($script:AudioButton,$hint)
-    if ($View -eq 'Audio') { Update-TaskPloppAudioView } else { Update-WindowList }
+function Show-TaskPloppView([ValidateSet('Tasks','Audio','Help')][string]$View = $script:CurrentView) {
+    $wasHelp=$script:CurrentView-eq'Help'
+    if($View-eq'Help'-and-not$wasHelp){$script:HelpReturnView=$script:CurrentView}
+    $script:CurrentView=$View
+    $script:Main.AudioView=$View-eq'Audio';$script:Main.HelpView=$View-eq'Help'
+    $script:Main.SuspendLayout()
+    try{
+        $statusRow=$script:MessageBar.Parent.RowStyles[1]
+        $statusRow.SizeType=if($View-eq'Help'){'Absolute'}else{'AutoSize'};$statusRow.Height=0
+        if($wasHelp-and$View-ne'Help'){$null=Update-TaskPloppMessageTimeout $script:MessageBar}
+        $script:MessageBar.Visible=$View-ne'Help'
+        $script:ListPanel.AutoScroll=$View-eq'Tasks'
+        $script:HelpButton.Text=if($View-eq'Help'){[string][char]0xE72B}else{'?'}
+        $script:HelpButton.Font=if($View-eq'Help'){$script:ToolbarIconFont}else{$script:Main.Font}
+        $helpHint=if($View-eq'Help'){'Zurueck (Escape)'}else{'Hilfe: Programmbeschreibung und Bedienung'}
+        $script:HelpButton.AccessibleName=$helpHint;$script:ToolbarToolTip.SetToolTip($script:HelpButton,$helpHint)
+        $script:AudioButton.Text=if($View-eq'Audio'){[string][char]0xE72B}else{'Audio'}
+        $script:AudioButton.Font=if($View-eq'Audio'){$script:ToolbarIconFont}else{$script:Main.Font}
+        $hint=if($View-eq'Audio'){'Zurueck zu Tasks (Escape)'}else{'Lautsprecher und Mikrofone auswaehlen'}
+        $script:AudioButton.AccessibleName=$hint;$script:ToolbarToolTip.SetToolTip($script:AudioButton,$hint)
+        switch($View){
+            Help {Show-TaskPloppHelp}
+            Audio {Update-TaskPloppAudioView -KeepMessage:$wasHelp}
+            Tasks {Update-WindowList}
+        }
+    }finally{$script:Main.ResumeLayout($true)}
+}
+function Show-TaskPloppHelp {
+    Clear-TaskPloppContent
+    $help=[Windows.Forms.RichTextBox]::new();$help.Name='HelpText';$help.ReadOnly=$true
+    $help.Margin=[Windows.Forms.Padding]::new(0);$help.BorderStyle='None';$help.BackColor=$script:Main.BackColor;$help.ForeColor=$script:Main.ForeColor
+    $help.DetectUrls=$false;$help.WordWrap=$true;$help.ScrollBars='Vertical'
+    $key=(Get-TaskPloppHotkeySpec $script:Settings).Label
+    $help.Text=@"
+TaskPlopp – deine lokalen Programme griffbereit
+
+TaskPlopp hilft dir, auch aus Citrix heraus zu lokalen Fenstern und Werkzeugen zu wechseln.
+
+Öffnen: $key
+Neuer Standard: Strg+NumPad0 (die 0 auf dem Ziffernblock).
+
+Favoriten und Fenster
+Einen Button anklicken oder 1–9, 0, danach A–Z drücken. Favoriten starten bei Bedarf ihr Programm. Weitere Fenster zeigt laufende lokale Anwendungen. Citrix minimiert das Citrix-Fenster.
+
+Audio und PC-Sperre
+Unter Audio Mikrofon oder Lautsprecher wählen. Das Schloss schaltet die automatische PC-Sperre um; die Wartezeit stellst du im Zahnrad ein.
+
+Diktat
+Mikrofon anklicken, sprechen, erneut klicken. Die ausgewählte lokale Engine transkribiert; der Text landet in der Zwischenablage. Mit Strg+V einfügen. Die Engine wählst du in der Konfiguration.
+
+KI-Fensterordner
+Fenster-Symbol neben dem Mikrofon anklicken, Arbeitsziel sprechen, erneut klicken. OpenAI plant die Anordnung aus Auftrag, Fenstertiteln und Bildschirmbildern. Benenne Favoriten und Chrome-Profile eindeutig. Rechtsklick auf das Symbol: letzte Anordnung rückgängig. Neu gestartete Programme bleiben offen.
+
+Konfiguration
+Das Zahnrad öffnet Einstellungen und sortierbare Favoriten. Änderungen werden sofort gespeichert. Unter Tastenkombination auf Aufnahme klicken und die gewünschte Kombination drücken. Rechtsklick aufs Zahnrad: Konfiguration sichern oder übertragen. API-Keys werden pro PC eingerichtet.
+
+Minimieren und Schließen
+Leertaste oder Minimieren legt TaskPlopp in die Taskleiste. X blendet es neben der Uhr aus; dort kannst du es ganz beenden. Beim Programmwechsel verhält es sich wie ein normales Fenster; der Hotkey holt es wieder nach vorne.
+
+Zurück-Pfeil oder Escape beendet diese Hilfe und zeigt die vorherige Ansicht.
+"@
+    $script:ListPanel.Controls.Add($help)
+    Update-TaskPloppContentLayout
 }
 function Update-TaskPloppAudioView {
     param([switch]$KeepMessage)
+    if($script:CurrentView-eq'Help'){return}
     $script:ListPanel.SuspendLayout()
     try {
         $hints=@(); $readError=$false

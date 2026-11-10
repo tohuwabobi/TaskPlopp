@@ -3,6 +3,7 @@ function Initialize-TaskPloppKeyboard($Form) {
     $Form.KeyPreview=$true
     $Form | Add-Member NoteProperty SelectionButtons (New-Object 'Collections.Generic.List[Windows.Forms.Button]')
     $Form | Add-Member NoteProperty AudioView $false
+    $Form | Add-Member NoteProperty HelpView $false
     $Form | Add-Member ScriptMethod ClearSelectionButtons {$this.SelectionButtons.Clear()}
     $Form | Add-Member ScriptMethod RegisterSelectionButton {
         param($button)
@@ -22,6 +23,10 @@ function Test-TaskPloppOpenMenu($Control) {
 function Invoke-TaskPloppSelection($Form,[Windows.Forms.Keys]$KeyData) {
     if(-not$Form.Visible-or-not$Form.Enabled-or[Windows.Forms.Form]::ActiveForm-ne$Form){return $false}
     if(($KeyData-band([Windows.Forms.Keys]::Control-bor[Windows.Forms.Keys]::Alt))-ne0-or(Test-TaskPloppOpenMenu $Form)){return $false}
+    if($Form.HelpView){
+        if($KeyData-eq[Windows.Forms.Keys]::Escape){Show-TaskPloppView $script:HelpReturnView;return $true}
+        return $false
+    }
     if($KeyData-eq[Windows.Forms.Keys]::Space){
         if((Get-Variable ConfigurationOpen -Scope Script -ValueOnly -ErrorAction SilentlyContinue)-eq$true){return $false}
         $control=$Form.ActiveControl

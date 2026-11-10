@@ -3,8 +3,8 @@
   "AutoLockEnabled": true,
   "AutoLockMinutes": 30,
   "DictationEngine": "Whisper",
-  "HotkeyModifiers": 3,
-  "HotkeyKey": "F10",
+  "HotkeyModifiers": 2,
+  "HotkeyKey": "NumPad0",
   "Programs": [
     {
       "Name": "Explorer",

@@ -3,9 +3,12 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot '..\src\TaskPlopp.ps1') -LibraryOnly
 function Assert([bool]$Value,[string]$Message){if(-not $Value){throw $Message}}
 $script:Settings=ConvertTo-TaskPloppSettings ([pscustomobject]@{Programs=@();ShowOpenWindows=$false})
-Assert ($script:Settings.HotkeyModifiers -eq 3 -and $script:Settings.HotkeyKey -eq 'F10') 'Migration verliert Standard'
+Assert ($script:Settings.HotkeyModifiers -eq 2 -and $script:Settings.HotkeyKey -eq 'NumPad0') 'Migration verliert Standard'
 $spec=Get-TaskPloppHotkeySpec $script:Settings
-Assert ($spec.Label -eq 'Strg+Alt+F10' -and $spec.Modifiers -eq 0x4003 -and $spec.Key -eq 0x79) 'Falscher Standard-Keycode'
+Assert ($spec.Label -eq 'Strg+NumPad0' -and $spec.Modifiers -eq 0x4002 -and $spec.Key -eq 0x60) 'Falscher Standard-Keycode'
+$old=ConvertTo-TaskPloppSettings ([pscustomobject]@{Programs=@();HotkeyModifiers=3;HotkeyKey='F10'})
+Assert ($old.HotkeyModifiers-eq3-and$old.HotkeyKey-eq'F10') 'Existing user combination was migrated'
+Assert ((Get-TaskPloppHotkeySpec ([pscustomobject]@{HotkeyModifiers=2;HotkeyKey='0'})).Key-ne$spec.Key) 'Top row zero equals Numpad0'
 $number=Get-TaskPloppHotkeySpec ([pscustomobject]@{HotkeyModifiers=12;HotkeyKey='0'})
 Assert ($number.Key -eq 0x30 -and $number.Label -eq 'Umschalt+Win+0') 'Ziffer/Modifier falsch'
 $calc=ConvertTo-TaskPloppSettings ([pscustomobject]@{Programs=@();HotkeyModifiers=0;HotkeyKey='Taschenrechner'})
@@ -97,7 +100,7 @@ try {
                 $button=$dialog.Controls.Find('CaptureHotkey',$true)[0]
                 $button.PerformClick()
                 Press-CaptureKey $dialog ([Windows.Forms.Keys]::ControlKey)
-                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'F10') 'Modifier alone saved'
+                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'NumPad0') 'Modifier alone saved'
                 Press-CaptureKey $dialog ([Windows.Forms.Keys]::Control-bor[Windows.Forms.Keys]::Alt-bor[Windows.Forms.Keys]::Shift-bor[Windows.Forms.Keys]::P)
                 Assert ($dialog.Controls.Find('HotkeyPreview',$true)[0].Text-eq'Aktuell: Strg+Alt+Umschalt+P') 'Recorded preview wrong'
                 Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'P') 'Recorded combination not autosaved'
