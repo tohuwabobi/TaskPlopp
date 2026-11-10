@@ -16,6 +16,9 @@ try{
         param($sender,$args)
         $smokeTimer.Stop()
         try{
+            $startup=$sender.Bounds
+            Assert ($startup.Height-le[Math]::Max($sender.MinimumSize.Height,[Math]::Floor($workArea.Height*0.85))) 'PMv2 startup exceeds cap'
+            Assert ([Math]::Abs(($startup.Left+$startup.Width/2)-($workArea.Left+$workArea.Width/2))-le1-and[Math]::Abs(($startup.Top+$startup.Height/2)-($workArea.Top+$workArea.Height/2))-le1) 'PMv2 startup is not centered'
             $script:LayoutPrograms=@($script:Settings.Programs)
             function Get-AppWindows {param([switch]$Raw) @()}
             $bar=$sender.Controls.Find('Messages',$true)[0]

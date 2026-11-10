@@ -133,7 +133,7 @@ try {
     $workArea = [Windows.Forms.Screen]::FromPoint([Windows.Forms.Cursor]::Position).WorkingArea
     $script:Main.Size = [Drawing.Size]::new([Math]::Min(760, $workArea.Width - 80), [Math]::Min(1200, $workArea.Height - 80))
     $script:Main.MinimumSize = [Drawing.Size]::new(460, 350)
-    $script:Main.StartPosition = 'CenterScreen'
+    $script:Main.StartPosition = 'Manual'
     $script:Main.TopMost = $false
     $script:Main.Font = [Drawing.Font]::new('Segoe UI', 15)
     $script:Main.BackColor = [Drawing.Color]::FromArgb(245, 247, 250)
@@ -427,7 +427,7 @@ try {
     Update-TaskPloppLayoutButton
     $script:UpdatingContentLayout=$false
     function Update-TaskPloppContentLayout {
-        if($script:UpdatingContentLayout){return}
+        if($script:UpdatingContentLayout-or$script:Main.WindowState-eq'Minimized'){return}
         $script:UpdatingContentLayout=$true
         try{
             $toolbarWidth=$toolbar.Padding.Horizontal+$toolbarLeft.Margin.Horizontal+$toolbarRight.Margin.Horizontal
@@ -455,6 +455,24 @@ try {
             }
         }finally{$script:UpdatingContentLayout=$false}
     }
+    function Set-TaskPloppStartupBounds([Drawing.Rectangle]$Area) {
+        $script:Main.PerformLayout();Update-TaskPloppContentLayout
+        $script:Main.Width=[Math]::Max($script:Main.MinimumSize.Width,[Math]::Min(760,[Math]::Max(1,$Area.Width-80)))
+        for($pass=0;$pass-lt2;$pass++){
+            $script:Main.PerformLayout();Update-TaskPloppContentLayout;$script:ListPanel.PerformLayout()
+            $height=$script:ListPanel.Padding.Vertical;$other=0
+            foreach($control in $script:ListPanel.Controls){
+                if($control-is[Windows.Forms.Button]-and-not$control.Tag.IsFavorite){$other++;if($other-gt3){break}}
+                $height+=$control.Height+$control.Margin.Vertical
+            }
+            $height+=$top.Height+$script:Main.Height-$script:Main.ClientSize.Height
+            $cap=[Math]::Max($script:Main.MinimumSize.Height,[Math]::Floor($Area.Height*0.85))
+            $script:Main.Height=[int][Math]::Max($script:Main.MinimumSize.Height,[Math]::Min($height,$cap))
+        }
+        $script:Main.PerformLayout();Update-TaskPloppContentLayout
+        $script:Main.Location=[Drawing.Point]::new(($Area.X+[int][Math]::Floor(($Area.Width-$script:Main.Width)/2)),($Area.Y+[int][Math]::Floor(($Area.Height-$script:Main.Height)/2)))
+    }
+    $script:Main.Add_Load({Set-TaskPloppStartupBounds $workArea})
     $script:ListPanel.Add_Layout({Update-TaskPloppContentLayout})
     $script:ListPanel.Add_SizeChanged({Update-TaskPloppContentLayout})
     $script:Main.Add_FontChanged({Update-TaskPloppContentLayout})

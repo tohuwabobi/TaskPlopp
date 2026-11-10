@@ -594,3 +594,17 @@ Fuer neue Konfigurationen gilt **Strg+NumPad0** (0 auf dem Ziffernblock). Gespei
 individuelle Kombinationen bleiben erhalten. Die Hilfe nennt auch deinen aktuell
 eingerichteten Hotkey. Den echten Aufruf mit NumLock an/aus und in Citrix testen;
 Windows kann bei ausgeschaltetem NumLock eine andere Taste melden.
+
+## Passende Startgroesse
+
+TaskPlopp berechnet seine Groesse einmal beim Prozessstart: Breite ungefaehr wie bisher,
+Hoehe fuer alle Favoriten plus bis zu drei weitere Fenster, begrenzt auf etwa 85 Prozent
+der Arbeitsflaechenhoehe. Bei vielen Eintraegen bleibt die Liste scrollbar. Die Mitte
+liegt auf dem Monitor unter dem Mauszeiger; die Windows-Taskleiste bleibt beruecksichtigt.
+Die vorhandene bedienbare Mindestgroesse hat bei sehr kleinen Arbeitsflaechen Vorrang.
+
+Der zweizeilige Statusbereich in Tasks/Audio bleibt auch leer voll reserviert.
+Meldungen, Aktualisieren, Hilfe/Audio und erneutes Oeffnen aendern die Fenstergroesse
+nicht automatisch. Manuelles Verschieben und Vergroessern bleibt moeglich, auch
+nach Minimieren/Wiederherstellen. Beim naechsten Prozessstart wird neu berechnet;
+es wird keine Groesse gespeichert und keine neue Einstellung benoetigt.
