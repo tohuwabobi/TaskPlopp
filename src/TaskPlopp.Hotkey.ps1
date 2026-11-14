@@ -1,6 +1,7 @@
 ﻿$script:HotkeyCleanupWarning=''
 # Register a replacement before saving/releasing the old hotkey.
-function Get-TaskPloppHotkeySpec($Settings) {
+function Get-TaskPloppHotkeySpec($Settings,[ValidateSet('Open','Dictation')][string]$Action='Open') {
+    if($Action-eq'Dictation'){$Settings=[pscustomobject]@{HotkeyModifiers=$Settings.DictationHotkeyModifiers;HotkeyKey=$Settings.DictationHotkeyKey}}
     $keyName=if($Settings.HotkeyKey -match '^\d$'){'D'+$Settings.HotkeyKey}elseif($Settings.HotkeyKey-eq'Taschenrechner'){'LaunchApplication2'}else{$Settings.HotkeyKey}
     $names=@()
     if($Settings.HotkeyModifiers -band 2){$names+='Strg'}
@@ -28,8 +29,8 @@ function Get-TaskPloppPressedModifiers {
     foreach($pair in @(@(17,2),@(18,1),@(16,4),@(91,8),@(92,8))){if([TaskPloppInterop.User]::GetAsyncKeyState($pair[0])-band0x8000){$bits=$bits-bor$pair[1]}}
     $bits
 }
-function New-TaskPloppHotkeyListener($Spec) {
-    $wake=Get-Variable WakeEvent -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+function New-TaskPloppHotkeyListener($Spec,$Signal=$null) {
+    $wake=$Signal;if($null-eq$wake){$wake=Get-Variable WakeEvent -Scope Script -ValueOnly -ErrorAction SilentlyContinue}
     $state=[hashtable]::Synchronized(@{ThreadId=[uint32]0;Registered=$false;Cleaned=$false;Error='';Wake=$wake})
     $ready=[Threading.ManualResetEventSlim]::new($false);$stop=[Threading.ManualResetEventSlim]::new($false)
     $space=[RunspaceFactory]::CreateRunspace();$space.ApartmentState='STA';$space.ThreadOptions='ReuseThread';$space.Open()
@@ -62,29 +63,61 @@ function Close-TaskPloppHotkeyListener($Listener) {
     $null=$Listener.PowerShell.EndInvoke($Listener.Async)
     $Listener.PowerShell.Dispose();$Listener.Runspace.Dispose();$Listener.Ready.Dispose();$Listener.Stop.Dispose();$Listener.Closed=$true
 }
-function Initialize-TaskPloppHotkey {
-    $spec=Get-TaskPloppHotkeySpec $script:Settings
-    $script:HotkeyListener=New-TaskPloppHotkeyListener $spec
-    $script:ActiveHotkey=$spec
+function Initialize-TaskPloppHotkey([ValidateSet('Open','Dictation')][string]$Action='Open') {
+    $spec=Get-TaskPloppHotkeySpec $script:Settings $Action
+    if($Action-eq'Open'){
+        $script:HotkeyListener=New-TaskPloppHotkeyListener $spec
+        $script:ActiveHotkey=$spec
+    }else{
+        $script:DictationHotkeyListener=New-TaskPloppHotkeyListener $spec $script:DictationHotkeyEvent
+        $script:ActiveDictationHotkey=$spec
+    }
     Update-TaskPloppTrayText
 }
 function Save-TaskPloppSettingsWithHotkey($Settings) {
     $script:HotkeyCleanupWarning=''
     $Settings=ConvertTo-TaskPloppSettings $Settings
-    $candidate=$null
-    $enabled=(Get-Variable HotkeysEnabled -Scope Script -ValueOnly -ErrorAction SilentlyContinue) -eq $true
-    $spec=Get-TaskPloppHotkeySpec $Settings
-    $active=Get-Variable ActiveHotkey -Scope Script -ValueOnly -ErrorAction SilentlyContinue
-    if($enabled -and ($null -eq $active -or $active.Modifiers -ne $spec.Modifiers -or $active.Key -ne $spec.Key)) {
-        try {$candidate=New-TaskPloppHotkeyListener $spec}
-        catch {throw "Die Tastenkombination $($spec.Label) konnte nicht registriert werden. Sie ist moeglicherweise bereits belegt. Bisherige Einstellungen bleiben erhalten. $($_.Exception.Message)"}
+    $previous=ConvertTo-TaskPloppSettings $script:Settings
+    $enabled=(Get-Variable HotkeysEnabled -Scope Script -ValueOnly -ErrorAction SilentlyContinue)-eq$true
+    $changes=@()
+    foreach($action in @('Open','Dictation')){
+        $spec=Get-TaskPloppHotkeySpec $Settings $action;$oldSpec=Get-TaskPloppHotkeySpec $previous $action
+        $activeName=if($action-eq'Dictation'){'ActiveDictationHotkey'}else{'ActiveHotkey'}
+        $active=Get-Variable $activeName -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if($enabled-and$null-ne$active){$oldSpec=$active}
+        if($spec.Modifiers-ne$oldSpec.Modifiers-or$spec.Key-ne$oldSpec.Key){$changes+=[pscustomobject]@{Action=$action;Spec=$spec;Listener=$null}}
     }
-    try {Save-Settings $Settings}
-    catch {if($null -ne $candidate){$candidate.Dispose()};throw}
-    if($null -ne $candidate){
-        $old=Get-Variable HotkeyListener -Scope Script -ValueOnly -ErrorAction SilentlyContinue
-        $script:HotkeyListener=$candidate;$script:ActiveHotkey=$spec
-        if($null -ne $old){try{$old.Dispose()}catch{$script:HotkeyCleanupWarning='Datei und neuer Hotkey gespeichert; der bisherige Hotkey-Thread ist noch nicht vollstaendig aufgeraeumt.'}}
+    $open=Get-TaskPloppHotkeySpec $Settings;$dictation=Get-TaskPloppHotkeySpec $Settings Dictation
+    if($changes.Count-and$open.Modifiers-eq$dictation.Modifiers-and$open.Key-eq$dictation.Key){throw 'Oeffnen und Diktat brauchen verschiedene Tastenkombinationen. Bisherige Einstellungen bleiben erhalten.'}
+    try{
+        if($enabled){foreach($change in $changes){
+            $signal=if($change.Action-eq'Dictation'){$script:DictationHotkeyEvent}else{$script:WakeEvent}
+            try{$change.Listener=New-TaskPloppHotkeyListener $change.Spec $signal}catch{throw ('Tastenkombination fuer '+$change.Action+' ('+$change.Spec.Label+') ist nicht verfuegbar. Bisherige Einstellungen bleiben erhalten.')}
+        }}
+        Save-Settings $Settings
+    }catch{
+        foreach($change in $changes){if($change.Listener){$change.Listener.Dispose()}}
+        throw
+    }
+    foreach($change in $changes){
+        if(-not$change.Listener){continue}
+        $listenerName=if($change.Action-eq'Dictation'){'DictationHotkeyListener'}else{'HotkeyListener'}
+        $specName=if($change.Action-eq'Dictation'){'ActiveDictationHotkey'}else{'ActiveHotkey'}
+        $old=Get-Variable $listenerName -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        Set-Variable $listenerName $change.Listener -Scope Script;Set-Variable $specName $change.Spec -Scope Script
+        if($old){try{$old.Dispose()}catch{$script:HotkeyCleanupWarning='Datei und neuer Hotkey gespeichert; bisheriger Listener noch nicht vollstaendig freigegeben.'}}
+    }
+}
+function Invoke-TaskPloppDictationHotkey {
+    if((Get-Variable ConfigurationOpen -Scope Script -ValueOnly -ErrorAction SilentlyContinue)-eq$true){return}
+    $transfer=Get-Variable TransferDialog -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+    if($transfer-and-not$transfer.IsDisposed){return}
+    if($null-ne$script:LayoutJob-or$null-ne$script:DictationInstaller-or($script:DictationPurpose-eq'Layout'-and$script:DictationPhase-ne'Ready')){return}
+    if($script:DictationPhase-eq'Recording'){
+        if(-not$script:DictationRecorder.Shared.Stop){Stop-TaskPloppRecording}
+    }elseif($script:DictationPhase-eq'Ready'){
+        Show-TaskPlopp
+        Invoke-TaskPloppDictation
     }
 }
 function Update-TaskPloppTrayText {

@@ -181,7 +181,7 @@ Audio und PC-Sperre
 Unter Audio kannst du Mikrofon und Lautsprecher wählen. Das Schloss schaltet die automatische PC-Sperre um.
 
 Diktat
-Mikrofon anklicken, sprechen, erneut klicken. Die ausgewählte lokale Engine transkribiert; der Text landet in der Zwischenablage. Mit Strg+V einfügen. Die Engine wählst du in der Konfiguration.
+Mikrofon anklicken, sprechen, erneut klicken. Die ausgewählte lokale Engine transkribiert; der Text landet in der Zwischenablage. Mit Strg+V einfügen. Die Engine wählst du in der Konfiguration. Alternativ startet und stoppt Strg+NumPad1 das Diktat global (konfigurierbar). Beim Start kommt TaskPlopp nach vorne; beim Stoppen und nach der Transkription bleibt dein aktuelles Programm aktiv.
 
 KI-Fensterordner
 Fenster-Symbol neben dem Mikrofon anklicken. Diktiere ins Mikro, wie die Fenster auf dem Desktop angeordnet werden sollen. Fenster-Symbol erneut klicken. OpenAI plant die Anordnung aus Auftrag, Fenstertiteln und Bildschirmbildern. Benenne Favoriten und Chrome-Profile eindeutig. Rechtsklick auf das Symbol: letzte Anordnung rückgängig. Neu gestartete Programme bleiben offen.
@@ -196,8 +196,10 @@ Das Zahnrad öffnet Einstellungen und sortierbare Favoriten. Änderungen werden 
             $index=[regex]::Match($help.Text,('(?m)^'+[regex]::Escape($heading)+'\r?$')).Index
             $help.Select($index,$heading.Length);$help.SelectionFont=$bold
         }
-        $shortcut='Strg+NumPad0';$index=$help.Text.IndexOf($shortcut,[StringComparison]::Ordinal)
-        $help.Select($index,$shortcut.Length);$help.SelectionFont=$bold
+        foreach($shortcut in @('Strg+NumPad0','Strg+NumPad1')){
+            $index=$help.Text.IndexOf($shortcut,[StringComparison]::Ordinal)
+            $help.Select($index,$shortcut.Length);$help.SelectionFont=$bold
+        }
         $help.Select(0,0)
     }finally{$bold.Dispose()}
     Update-TaskPloppContentLayout

@@ -111,6 +111,8 @@ if (-not $created -and -not $SmokeTest) {
     return
 }
 
+$script:DictationHotkeyEvent=[Threading.EventWaitHandle]::new($false,[Threading.EventResetMode]::AutoReset)
+$script:DictationHotkeyListener=$null;$script:ActiveDictationHotkey=$null
 $script:StartupNotice=''
 $script:MigrationNotice=''
 if(-not$SmokeTest-and-not$ResidentTest-and-not$ConfigFile){$migration=Initialize-TaskPloppData;$script:ConfigPath=$migration.ConfigPath;$script:MigrationNotice=$migration.Notice}
@@ -491,12 +493,12 @@ try {
         $script:Tray.ContextMenuStrip = $menu
         $script:Tray.Add_DoubleClick({ Show-TaskPlopp })
         $script:Tray.Visible = $true
-        try {
-            Initialize-TaskPloppHotkey
-        } catch {
-            $script:Tray.Text = 'TaskPlopp: Hotkey belegt'
-            $label=(Get-TaskPloppHotkeySpec $script:Settings).Label
-            $script:StartupNotice+=" $label ist nicht verfuegbar. Bitte die Tastenkombination ueber das Zahnrad aendern."
+        foreach($action in @('Open','Dictation')){
+            try{Initialize-TaskPloppHotkey $action}catch{
+                $label=(Get-TaskPloppHotkeySpec $script:Settings $action).Label
+                $name=if($action-eq'Dictation'){'Diktat'}else{'Oeffnen'}
+                $script:StartupNotice+=" $name-Hotkey $label ist nicht verfuegbar. Bitte ueber das Zahnrad aendern."
+            }
         }
     }
     $timer = New-Object Windows.Forms.Timer
@@ -506,6 +508,7 @@ try {
         if ($script:WakeEvent.WaitOne(0)) {
             Show-TaskPlopp
         }
+        if($script:DictationHotkeyEvent.WaitOne(0)){Invoke-TaskPloppDictationHotkey}
     })
     $script:Main.Add_Shown({ $script:Main.TopMost=$true;Raise-TaskPloppWindow $script:Main.Handle })
     if($OnShown) { $script:Main.Add_Shown($OnShown) }
@@ -559,8 +562,10 @@ try {
     if(Get-Variable transferMenu -ErrorAction SilentlyContinue){$transferMenu.Dispose()}
     if(Get-Variable dictationMenu -ErrorAction SilentlyContinue){$dictationMenu.Dispose()}
     if (Get-Variable idleTimer -ErrorAction SilentlyContinue) { $idleTimer.Dispose() }
-    $registeredHotkey=Get-Variable HotkeyListener -Scope Script -ValueOnly -ErrorAction SilentlyContinue
-    if($null -ne $registeredHotkey){$registeredHotkey.Dispose()}
+    foreach($name in @('HotkeyListener','DictationHotkeyListener')){
+        $registeredHotkey=Get-Variable $name -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if($null-ne$registeredHotkey){$registeredHotkey.Dispose()}
+    }
     if (Get-Variable Tray -Scope Script -ErrorAction SilentlyContinue) {
         $script:Tray.Visible = $false
         $script:Tray.ContextMenuStrip.Dispose()
@@ -572,5 +577,6 @@ try {
     if (Get-Variable ToolbarToolTip -Scope Script -ErrorAction SilentlyContinue) { $script:ToolbarToolTip.Dispose() }
     if (Get-Variable ToolbarIconFont -Scope Script -ErrorAction SilentlyContinue) { $script:ToolbarIconFont.Dispose() }
     if (Get-Variable AppIcon -Scope Script -ErrorAction SilentlyContinue) { $script:AppIcon.Dispose() }
+    $script:DictationHotkeyEvent.Dispose()
     $script:WakeEvent.Dispose()
 }

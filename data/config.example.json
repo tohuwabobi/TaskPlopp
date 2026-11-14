@@ -5,6 +5,8 @@
   "DictationEngine": "Whisper",
   "HotkeyModifiers": 2,
   "HotkeyKey": "NumPad0",
+  "DictationHotkeyModifiers": 2,
+  "DictationHotkeyKey": "NumPad1",
   "Programs": [
     {
       "Name": "Explorer",

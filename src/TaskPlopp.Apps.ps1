@@ -7,19 +7,14 @@ function Get-TextProperty($Object, [string]$Name) {
 function ConvertTo-TaskPloppSettings($Data) {
     if($Data.PSObject.Properties.Name -notcontains 'WindowLayoutModel'){$Data|Add-Member NoteProperty WindowLayoutModel 'gpt-4.1-mini'}
     if($Data.WindowLayoutModel-isnot[string]-or$Data.WindowLayoutModel-cnotmatch'^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$'){throw 'Fensterordner: Bitte einen gueltigen OpenAI-Modellnamen eintragen.'}
-    if($Data.PSObject.Properties.Name -notcontains 'HotkeyModifiers') {
-        $Data | Add-Member -NotePropertyName HotkeyModifiers -NotePropertyValue 2
+    foreach($prefix in @('','Dictation')){
+        $modifiers=$prefix+'HotkeyModifiers';$key=$prefix+'HotkeyKey'
+        if($Data.PSObject.Properties.Name-notcontains$modifiers){$Data|Add-Member NoteProperty $modifiers 2}
+        if($Data.PSObject.Properties.Name-notcontains$key){$Data|Add-Member NoteProperty $key $(if($prefix){'NumPad1'}else{'NumPad0'})}
+        if(($Data.$modifiers-isnot[int]-and$Data.$modifiers-isnot[long])-or$Data.$modifiers-lt0-or$Data.$modifiers-gt15){throw 'Tastenkombination: Ungueltige Zusatztasten.'}
+        if($Data.$key-isnot[string]-or$Data.$key-cnotmatch'^(?:[A-Z]|[0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Taschenrechner|NumPad[0-9]|Back|Tab|Return|Space|PageUp|PageDown|End|Home|Left|Up|Right|Down|Insert|Delete|Browser(?:Back|Forward|Refresh|Stop|Search|Favorites|Home)|Volume(?:Mute|Down|Up)|Media(?:NextTrack|PreviousTrack|Stop|PlayPause)|LaunchMail|SelectMedia|LaunchApplication[12])$'-or$Data.$key-eq'F12'){throw 'Tastenkombination: Bitte eine unterstuetzte Taste waehlen. F12 ist reserviert.'}
+        if($Data.$modifiers-eq0-and$Data.$key-cnotmatch'^(?:Taschenrechner|Browser.+|Volume.+|Media.+|LaunchMail|SelectMedia|LaunchApplication[12])$'){throw 'Tastenkombination: Mindestens eine Zusatztaste waehlen; Sondertasten duerfen alleine verwendet werden.'}
     }
-    if($Data.PSObject.Properties.Name -notcontains 'HotkeyKey') {
-        $Data | Add-Member -NotePropertyName HotkeyKey -NotePropertyValue 'NumPad0'
-    }
-    if(($Data.HotkeyModifiers -isnot [int] -and $Data.HotkeyModifiers -isnot [long]) -or $Data.HotkeyModifiers -lt 0 -or $Data.HotkeyModifiers -gt 15) {
-        throw 'Tastenkombination: Ungueltige Zusatztasten.'
-    }
-    if($Data.HotkeyKey -isnot [string] -or $Data.HotkeyKey -cnotmatch '^(?:[A-Z]|[0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Taschenrechner|NumPad[0-9]|Back|Tab|Return|Space|PageUp|PageDown|End|Home|Left|Up|Right|Down|Insert|Delete|Browser(?:Back|Forward|Refresh|Stop|Search|Favorites|Home)|Volume(?:Mute|Down|Up)|Media(?:NextTrack|PreviousTrack|Stop|PlayPause)|LaunchMail|SelectMedia|LaunchApplication[12])$' -or $Data.HotkeyKey -eq 'F12') {
-        throw 'Tastenkombination: A-Z, 0-9, F1-F24 oder Taschenrechner waehlen (F12 ist fuer Windows reserviert).'
-    }
-    if($Data.HotkeyModifiers -eq 0 -and $Data.HotkeyKey -cnotmatch '^(?:Taschenrechner|Browser.+|Volume.+|Media.+|LaunchMail|SelectMedia|LaunchApplication[12])$'){throw 'Tastenkombination: Mindestens eine Zusatztaste waehlen; Sondertasten duerfen alleine verwendet werden.'}
     if($Data.PSObject.Properties.Name -notcontains 'DictationEngine') {
         $Data | Add-Member -NotePropertyName DictationEngine -NotePropertyValue 'Whisper'
     }

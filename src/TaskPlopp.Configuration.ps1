@@ -167,14 +167,20 @@ function Show-TaskPloppConfiguration {
     $hotkeyPreview.Name='HotkeyPreview';$hotkeyPreview.AutoSize=$true
     $hotkeyPreview.Text='Aktuell: '+(Get-TaskPloppHotkeySpec $working).Label
     $captureButton=[Windows.Forms.Button]::new();$captureButton.Name='CaptureHotkey';$captureButton.Text='Tastenkombination aufnehmen';$captureButton.AutoSize=$true
+    $captureButton.Tag='Open'
+    $dictationHotkeyLabel=[Windows.Forms.Label]::new();$dictationHotkeyLabel.Text='Diktat global starten/stoppen:';$dictationHotkeyLabel.AutoSize=$true
+    $dictationHotkeyPreview=[Windows.Forms.Label]::new();$dictationHotkeyPreview.Name='DictationHotkeyPreview';$dictationHotkeyPreview.AutoSize=$true
+    $dictationHotkeyPreview.Text='Aktuell: '+(Get-TaskPloppHotkeySpec $working Dictation).Label
+    $captureDictationButton=[Windows.Forms.Button]::new();$captureDictationButton.Name='CaptureDictationHotkey';$captureDictationButton.Text='Tastenkombination aufnehmen';$captureDictationButton.AutoSize=$true;$captureDictationButton.Tag='Dictation'
     $captureInput=[Windows.Forms.TextBox]::new();$captureInput.Name='HotkeyCapture';$captureInput.ReadOnly=$true;$captureInput.ShortcutsEnabled=$false;$captureInput.Width=600
     $captureInput.Text='Zum Aendern auf Tastenkombination aufnehmen klicken.'
     $captureTimer=[Windows.Forms.Timer]::new();$captureTimer.Interval=25
-    $captureState=@{Active=$false;Down=@()}
+    $captureState=@{Active=$false;Down=@();Action='Open'}
     $hotkeyHelp=New-Object Windows.Forms.Label
     $hotkeyHelp.AutoSize=$true;$hotkeyHelp.MaximumSize=[Drawing.Size]::new(700,0)
     $hotkeyHelp.Text="Gewuenschte Kombination druecken; sie wird sofort geprueft und gespeichert.`r`nEscape bricht ab. Bei belegter Kombination bleibt die bisherige erhalten.`r`nSondertasten wie Taschenrechner sind auch ohne Strg/Alt moeglich.`r`nLogitech-Belegung und Citrix koennen Tasten abfangen. Bitte dort ebenfalls testen."
-    $hotkeyLayout.Controls.AddRange(@($hotkeyLabel,$hotkeyPreview,$captureButton,$captureInput,$hotkeyHelp))
+    $hotkeyLayout.AutoScroll=$true
+    $hotkeyLayout.Controls.AddRange(@($hotkeyLabel,$hotkeyPreview,$captureButton,$dictationHotkeyLabel,$dictationHotkeyPreview,$captureDictationButton,$captureInput,$hotkeyHelp))
     $hotkeyTab.Controls.Add($hotkeyLayout);[void]$tabs.TabPages.Add($hotkeyTab)
 
     $favoriteList = New-Object Windows.Forms.ListBox
@@ -284,6 +290,7 @@ function Show-TaskPloppConfiguration {
             $show.Checked=$script:Settings.ShowOpenWindows;$layoutModel.Text=$script:Settings.WindowLayoutModel
             $dictationChoice.SelectedIndex=if($script:Settings.DictationEngine-eq'Vosk'){1}else{0}
             $hotkeyPreview.Text='Aktuell: '+(Get-TaskPloppHotkeySpec $script:Settings).Label
+            $dictationHotkeyPreview.Text='Aktuell: '+(Get-TaskPloppHotkeySpec $script:Settings Dictation).Label
             $selection=[Math]::Min($selection,$favoriteList.Items.Count-1)
             & $loadFavorite $selection
         }finally{$configState.Loading=$false}
@@ -385,7 +392,7 @@ function Show-TaskPloppConfiguration {
     $lockMinutes.Add_ValueChanged({$value=[int]$lockMinutes.Value;& $commit {param($c)$c.AutoLockMinutes=$value}})
     $dictationChoice.Add_SelectedIndexChanged({$value=if($dictationChoice.SelectedIndex-eq1){'Vosk'}else{'Whisper'};& $commit {param($c)$c.DictationEngine=$value}})
     $stopCapture={
-        $captureState.Active=$false;$captureTimer.Stop();$captureButton.Text='Tastenkombination aufnehmen'
+        $captureState.Active=$false;$captureTimer.Stop();$captureButton.Text='Tastenkombination aufnehmen';$captureDictationButton.Text='Tastenkombination aufnehmen'
     }
     $acceptCapture={
         param([int]$code,[int]$bits)
@@ -396,8 +403,9 @@ function Show-TaskPloppConfiguration {
             if($null-eq$captured){return}
             & $stopCapture
             $value=$captured.HotkeyKey
-            & $commit {param($c)$c.HotkeyModifiers=$bits;$c.HotkeyKey=$value}
-            $captureInput.Text=if($configState.LastError){'Nicht gespeichert. Bisherige Kombination bleibt erhalten.'}else{'Aktiv: '+(Get-TaskPloppHotkeySpec $script:Settings).Label}
+            $action=$captureState.Action
+            & $commit {param($c) if($action-eq'Dictation'){$c.DictationHotkeyModifiers=$bits;$c.DictationHotkeyKey=$value}else{$c.HotkeyModifiers=$bits;$c.HotkeyKey=$value}}
+            $captureInput.Text=if($configState.LastError){'Nicht gespeichert. Bisherige Kombination bleibt erhalten.'}else{'Aktiv: '+(Get-TaskPloppHotkeySpec $script:Settings $action).Label}
         }catch{
             & $stopCapture;$captureInput.Text='Nicht gespeichert. Erneut aufnehmen, um es noch einmal zu versuchen.'
             Set-TaskPloppMessage Error 'Tastenkombination nicht uebernommen' $_.Exception.Message
@@ -410,12 +418,18 @@ function Show-TaskPloppConfiguration {
         $captureState.Down=$down
         if($fresh.Count){& $acceptCapture $fresh[0] (Get-TaskPloppPressedModifiers)}
     }
-    $captureButton.Add_Click({
-        if($captureState.Active){& $stopCapture;$captureInput.Text='Aufnahme abgebrochen.';return}
+    $beginCapture={
+        param($sender,$e)
+        if($captureState.Active){
+            $same=$captureState.Action-eq[string]$sender.Tag;& $stopCapture
+            if($same){$captureInput.Text='Aufnahme abgebrochen.';return}
+        }
+        $captureState.Action=[string]$sender.Tag
         $captureState.Down=@(Get-TaskPloppPressedCaptureKeys);$captureState.Active=$true
         $captureInput.Text='Druecke jetzt die gewuenschte Tastenkombination. Escape bricht ab.'
-        $captureButton.Text='Aufnahme abbrechen';$captureInput.Focus();$captureTimer.Start()
-    })
+        $sender.Text='Aufnahme abbrechen';$captureInput.Focus();$captureTimer.Start()
+    }
+    $captureButton.Add_Click($beginCapture);$captureDictationButton.Add_Click($beginCapture)
     $captureInput.Add_PreviewKeyDown({param($sender,$e) if($captureState.Active){$e.IsInputKey=$true}})
     $captureInput.Add_KeyDown({
         param($sender,$e)
@@ -427,7 +441,7 @@ function Show-TaskPloppConfiguration {
     })
     $captureTimer.Add_Tick($pollCapture)
     $captureInput.Add_Leave({
-        if($captureButton.Focused){return}
+        if($captureButton.Focused-or$captureDictationButton.Focused){return}
         if($captureState.Active){& $pollCapture}
         if($captureState.Active){& $stopCapture;$captureInput.Text='Aufnahme abgebrochen. Zum Aufnehmen erneut klicken.'}
     })
@@ -447,7 +461,8 @@ function Show-TaskPloppConfiguration {
     $fit=[Drawing.Size]::new([Math]::Min($dialog.Width,$area.Width-40),[Math]::Min($dialog.Height,$area.Height-40))
     $dialog.MinimumSize=$fit;$dialog.Size=$fit
     $script:ConfigurationOpen=$true
-    try { [void]$dialog.ShowDialog($script:Main) } finally { $script:ConfigurationOpen=$false;$keyInput.Clear();$captureTimer.Dispose();$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
+    $null=$script:DictationHotkeyEvent.Reset()
+    try { [void]$dialog.ShowDialog($script:Main) } finally { $null=$script:DictationHotkeyEvent.Reset();$script:ConfigurationOpen=$false;$keyInput.Clear();$captureTimer.Dispose();$dictationStatusTimer.Dispose();$dialog.Dispose();$script:ConfigurationMessageBar=$null }
     Show-TaskPloppView
     if($configState.LastError){Set-TaskPloppMessage Error 'Aenderung nicht uebernommen' $configState.LastError}
 }

@@ -122,9 +122,26 @@ try {
                 Assert ($dialog.Controls.Find('HotkeyCapture',$true)[0].Text-like'*abgebrochen*') 'Cancel button restarts capture'
                 $button.PerformClick();$tab.Parent.SelectedIndex=0
                 Assert ($button.Text-eq'Tastenkombination aufnehmen') 'Tab change retains capture'
+                $tab.Parent.SelectedTab=$tab
+                $dictationButton=$dialog.Controls.Find('CaptureDictationHotkey',$true)[0]
+                $dictationButton.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::Control-bor[Windows.Forms.Keys]::F8)
+                Assert ((Get-Settings -Path $testConfig).DictationHotkeyKey-eq'F8'-and(Get-Settings -Path $testConfig).HotkeyKey-eq'F9') 'Dictation capture overwrote Open'
+                Assert ($dialog.Controls.Find('DictationHotkeyPreview',$true)[0].Text-eq'Aktuell: Strg+F8') 'Dictation preview wrong'
+                $button.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::Control-bor[Windows.Forms.Keys]::F8)
+                Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'F9') 'Duplicate role accepted'
+                $dictationButton.PerformClick();Press-CaptureKey $dialog ([Windows.Forms.Keys]::Control-bor[Windows.Forms.Keys]::F7)
+                Assert ((Get-Settings -Path $testConfig).DictationHotkeyKey-eq'F7') 'Dictation capture failed recovery'
+                $dialog.PerformLayout();[Windows.Forms.Application]::DoEvents()
+                Assert ($dictationButton.Visible-and$dictationButton.Width-ge$dictationButton.PreferredSize.Width) 'Dictation capture button clipped'
+                $image=[Drawing.Bitmap]::new($dialog.Width,$dialog.Height)
+                try{$dialog.DrawToBitmap($image,[Drawing.Rectangle]::new(0,0,$dialog.Width,$dialog.Height));$image.Save((Join-Path $env:TEMP 'TaskPlopp-hotkey-actions.png'))}finally{$image.Dispose()}
+                $script:DictationHotkeyEvent.Set()|Out-Null
+                Invoke-TaskPloppDictationHotkey
+                Assert ($script:DictationPhase-eq'Ready') 'Configuration hotkey started microphone'
                 $dialog.Controls.Find('CloseSettings',$true)[0].PerformClick()
             }
-            Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'F9') 'Capture close lost settings'
+            Assert ((Get-Settings -Path $testConfig).HotkeyKey-eq'F9'-and(Get-Settings -Path $testConfig).DictationHotkeyKey-eq'F7') 'Capture close lost settings'
+            Assert (-not$script:DictationHotkeyEvent.WaitOne(0)) 'Signal recorded in config leaked after close'
             Write-Host 'OK: Press-to-record UI, modifiers ignored alone, immediate save, calculator, invalid/F12 preserve old key, Escape/button/tab cancel.'
         }catch{$global:HotkeyUiFailure=$_;Write-Host $_.ToString()}
     }

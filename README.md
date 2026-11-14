@@ -1,4 +1,4 @@
-# TaskPlopp
+﻿# TaskPlopp
 
 Kleiner lokaler Fensterumschalter fuer Windows PowerShell 5.1 mit Windows Forms.
 Eigener Programm-, Installer- und Testcode besteht aus PowerShell;
@@ -41,7 +41,8 @@ Der Hotkey wird ueber die Windows-API RegisterHotKey registriert; die Verknuepfu
 selbst hat keine Tastenkombination mehr. Falls die Kombination bereits belegt ist,
 erscheint der Hinweis in der Statusleiste; die GUI bleibt ueber das Symbol erreichbar.
 
-Unter **Konfiguration > Tastenkombination** auf **Tastenkombination aufnehmen**
+Unter **Konfiguration > Tastenkombination** sind **Oeffnen** und **Diktat** getrennt
+konfigurierbar. Beim gewuenschten Eintrag auf **Tastenkombination aufnehmen**
 klicken und die gewuenschte Kombination druecken. TaskPlopp erkennt, prueft und
 speichert sie sofort. Escape, erneuter Buttonklick, Tabwechsel oder Fokusverlust
 brechen die Aufnahme ab. Strg/Alt/Umschalt/Win alleine speichern nichts.
@@ -262,6 +263,12 @@ wird. Beide Engines werden nach dem Entpacken mit synthetischer Stille geprueft;
 erst danach gelten sie als bereit. Fortschritt und Fehler stehen sowohl im
 Konfigurationsdialog als auch in der gemeinsamen Statusleiste.
 
+- **Strg+NumPad1** startet und stoppt das Diktat global, alternativ zum Mikrofonbutton.
+  Beim Start erscheint TaskPlopp mit Aufnahmehinweis und Pegel. Beim Stoppen und
+  nach der Transkription bleibt das gerade aktive Programm im Vordergrund.
+  Waehrend Transkription, Fensterordner, Komponenteninstallation und offenen
+  Konfigurations-/Uebertragungsdialogen wird der Diktat-Hotkey ignoriert.
+  Beide Hotkeys sind getrennt konfigurierbar; bestehende Oeffnen-Belegungen bleiben erhalten.
 - Mikrofon oben einmal klicken: Aufnahme vom Windows-Standardmikrofon beginnt.
   Das Mikrofon waehlt man zuvor ueber **Audio**. Gruener Pegelverlauf zeigt den
   Eingang, keine bestaetigte Spracherkennung.

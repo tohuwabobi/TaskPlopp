@@ -74,6 +74,10 @@ try{
             }
             $body='TaskPlopp hilft dir';$help.Select($help.Text.IndexOf($body),$body.Length)
             Assert (-not$help.SelectionFont.Bold) 'Help body became bold'
+            foreach($shortcut in @('Strg+NumPad0','Strg+NumPad1')){
+                $help.Select($help.Text.IndexOf($shortcut),$shortcut.Length)
+                Assert ($null-ne$help.SelectionFont-and$help.SelectionFont.Bold) ('Help shortcut not bold: '+$shortcut)
+            }
             $help.Select(0,0)
             $helpBounds=Client-Bounds $help $sender;$toolbarBounds=Client-Bounds $toolbar $sender
             Assert ($helpBounds.Top-eq$toolbarBounds.Bottom+$content.Padding.Top-and$helpBounds.Bottom-eq$sender.ClientSize.Height-$content.Padding.Bottom) 'Help does not fill whole content below toolbar'

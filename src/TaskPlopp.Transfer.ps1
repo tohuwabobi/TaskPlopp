@@ -7,7 +7,7 @@ function ConvertFrom-TaskPloppTransferJson([string]$Json) {
         foreach($key in 'Name','ProcessName','TitleContains'){if($program.PSObject.Properties.Name-notcontains$key-or$program.$key-isnot[string]){throw "Ungueltiger Favorit: $key"}}
         if(-not$program.Name.Trim()-or-not$program.ProcessName.Trim()){throw 'Favorit ohne Name oder Programmkennung.'}
     }
-    $known=@('ShowOpenWindows','Programs','HiddenWindows','AutoLockEnabled','AutoLockMinutes','DictationEngine','WindowLayoutModel','HotkeyModifiers','HotkeyKey')
+    $known=@('ShowOpenWindows','Programs','HiddenWindows','AutoLockEnabled','AutoLockMinutes','DictationEngine','WindowLayoutModel','HotkeyModifiers','HotkeyKey','DictationHotkeyModifiers','DictationHotkeyKey')
     if(@($data.PSObject.Properties.Name|Where-Object{$_-notin$known}).Count){throw 'Unbekannte Konfigurationsfelder im Paket.'}
     ConvertTo-TaskPloppSettings $data
 }
@@ -226,5 +226,5 @@ function Show-TaskPloppTransfer {
         }catch{$text.Text=$_.Exception.Message;Set-TaskPloppMessage Error 'Anwenden nicht vollstaendig bestaetigt' $text.Text}
     })
     if($OnShown){$dialog.Add_Shown($OnShown)}
-    try{$null=$dialog.ShowDialog($script:Main)}finally{Clear-TaskPloppTransferPreparation $dialog;$dialog.Dispose();$script:TransferDialog=$null}
+    try{$null=$dialog.ShowDialog($script:Main)}finally{Clear-TaskPloppTransferPreparation $dialog;$dialog.Dispose();$script:TransferDialog=$null;$signal=Get-Variable DictationHotkeyEvent -Scope Script -ValueOnly -ErrorAction SilentlyContinue;if($signal){$null=$signal.Reset()}}
 }
