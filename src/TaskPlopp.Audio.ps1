@@ -68,8 +68,7 @@ function Get-TaskPloppAudioDevices([ValidateRange(0,1)][int]$Flow) {
                 $props=[object[]]@([uint32]0,[IntPtr]::Zero);Invoke-TaskPloppAudioCom $endpoint ([TaskPloppInterop.AudioEndpoint]) OpenPropertyStore $props
                 $store=ConvertTo-TaskPloppComObject $props[1] ([TaskPloppInterop.AudioProperties])
                 $name=Get-TaskPloppAudioProperty $store 'A45C254E-DF1C-4EFD-8020-67D146A850E0' 14
-                $container='';try{$container=Get-TaskPloppAudioProperty $store '8C7ED206-3F8A-4827-B3AB-AE9E1FAEFC6C' 2}catch{}
-                [pscustomobject]@{Id=$id;Name=$(if($name){$name}else{$id});ContainerId=$container}
+                [pscustomobject]@{Id=$id;Name=$(if($name){$name}else{$id})}
             }finally{if($null-ne$store){$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($store)};if($null-ne$endpoint){$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($endpoint)}}
         }
     }finally{if($null-ne$collection){$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($collection)};$null=[Runtime.InteropServices.Marshal]::ReleaseComObject($enumerator)}
@@ -106,12 +105,16 @@ function Set-TaskPloppAudioDefault([string]$Id) {
     Initialize-TaskPloppAudio
     for ($role=0; $role -lt 3; $role++) { Set-TaskPloppAudioRole $Id $role }
 }
-function Get-TaskPloppAudioLabel($Device, [object[]]$Defaults) {
-    $roles = @('Console','Multimedia','Kommunikation')
-    $active = @($Defaults | Where-Object { $_.Id -eq $Device.Id -and -not $_.Error })
-    if ($active.Count -eq 3) { return "[Aktiv] $($Device.Name)" }
-    if ($active.Count -gt 0) { return "[$(($active | ForEach-Object { $roles[$_.Role] }) -join ', ')] $($Device.Name)" }
-    return $Device.Name
+function Get-TaskPloppAudioDisplayName([string]$Name) {
+    if ($Name -match '^(?:Lautsprecher|Speakers?|Mikrofon(?:array)?|Microphone(?: Array)?)\s+\((.+)\)$') {
+        $shortName = ($Matches[1] -replace '^\d+\s*-\s*', '').Trim()
+    } elseif ($Name -match '^([^()]+?)\s+\([^()]+\)$') {
+        $shortName = $Matches[1].Trim()
+    } else {
+        return $Name
+    }
+    if ($shortName) { return $shortName }
+    return $Name
 }
 function Invoke-TaskPloppAudioSelection($Device, [int]$Flow) {
     try {
@@ -210,6 +213,8 @@ function Update-TaskPloppAudioView {
     $script:ListPanel.SuspendLayout()
     try {
         $hints=@(); $readError=$false
+        $palette = @('#FDE047', '#F87171', '#60A5FA', '#4ADE80', '#F472B6', '#FB923C' |
+            ForEach-Object { [Drawing.ColorTranslator]::FromHtml($_) })
         Clear-TaskPloppContent
         $grid = New-Object Windows.Forms.TableLayoutPanel
         $grid.Name='AudioColumns'; $grid.ColumnCount=2; $grid.RowCount=1
@@ -221,8 +226,10 @@ function Update-TaskPloppAudioView {
         $grid.Tag=New-Object Windows.Forms.ToolTip
         $grid.Add_Disposed({ param($sender,$eventArgs) $sender.Tag.Dispose() })
         for ($flow=0; $flow -lt 2; $flow++) {
-            $column=New-Object Windows.Forms.TableLayoutPanel
-            $column.Dock='Fill'; $column.ColumnCount=1; $column.AutoScroll=$true
+            $column = New-Object Windows.Forms.TableLayoutPanel
+            $column.Dock = 'Fill'
+            $column.ColumnCount = 1
+            $column.AutoScroll = $true
             [void]$column.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new([Windows.Forms.SizeType]::Percent,100))
             $column.Margin=[Windows.Forms.Padding]::new(0,0,8,0)
             $grid.Controls.Add($column,$flow,0)
@@ -231,7 +238,11 @@ function Update-TaskPloppAudioView {
             $heading.AutoSize=$true; $heading.Margin=[Windows.Forms.Padding]::new(3,0,3,10)
             $column.Controls.Add($heading)
             try {
-                $devices=@(Get-TaskPloppAudioDevices $flow | Sort-Object Name,Id)
+                $devices = @(Get-TaskPloppAudioDevices $flow | ForEach-Object {
+                    [pscustomobject]@{ Device = $_; DisplayName = Get-TaskPloppAudioDisplayName $_.Name }
+                } | Sort-Object DisplayName, { $_.Device.Name }, { $_.Device.Id })
+                $nameCounts = @{}
+                foreach ($entry in $devices) { $nameCounts[$entry.DisplayName]++ }
                 $defaults=@(Get-TaskPloppAudioDefaults $flow)
                 $missing=@($defaults | Where-Object { -not $_.Id -or $_.Error })
                 if ($missing.Count -gt 0) {
@@ -248,17 +259,30 @@ function Update-TaskPloppAudioView {
                     $notice.AutoSize=$true; $notice.MaximumSize=[Drawing.Size]::new(220,0)
                     $column.Controls.Add($notice)
                 }
-                foreach($device in $devices) {
-                    $button=New-Object Windows.Forms.Button
-                    $button.Dock='Top'
-                    $button.Text=Get-TaskPloppAudioLabel $device $defaults
-                    $button.Height=76; $button.Width=[Math]::Max(100,$column.ClientSize.Width-25)
-                    $button.FlatStyle='Flat'; $button.AutoEllipsis=$true
-                    $button.BackColor=Get-TaskPloppAudioColor -Name $device.Name -ContainerId $device.ContainerId
-                    $button.Tag=[pscustomobject]@{Device=$device;Flow=$flow}
-                    $grid.Tag.SetToolTip($button,$button.Text)
-                    if(@($defaults | Where-Object Id -eq $device.Id).Count -gt 0) { $button.FlatAppearance.BorderSize=3 }
-                    # Set complete label first. Register once so [1]...[Z] survive refreshes.
+                foreach ($entry in $devices) {
+                    $device = $entry.Device
+                    $standardRoles = @($defaults | Where-Object { $_.Id -eq $device.Id -and -not $_.Error } |
+                        ForEach-Object { @('Console', 'Multimedia', 'Kommunikation')[$_.Role] })
+                    $button = New-Object Windows.Forms.Button
+                    $button.Anchor = 'Top, Left'
+                    $button.Text = if ($nameCounts[$entry.DisplayName] -gt 1) { $device.Name } else { $entry.DisplayName }
+                    $button.Height = 76
+                    $button.Width = 70
+                    $button.FlatStyle = 'Flat'
+                    $button.AutoEllipsis = $true
+                    $button.ForeColor = [Drawing.Color]::Black
+                    $color = $palette[$script:Main.SelectionButtons.Count % $palette.Count]
+                    $button.BackColor = $color
+                    $button.FlatAppearance.MouseOverBackColor = $color
+                    $button.FlatAppearance.MouseDownBackColor = $color
+                    $button.FlatAppearance.BorderColor = [Drawing.Color]::Black
+                    $button.FlatAppearance.BorderSize = if ($standardRoles.Count) { 3 } else { 1 }
+                    $button.Tag = [pscustomobject]@{ Device = $device; Flow = $flow }
+                    $tooltip = $device.Name
+                    if ($standardRoles.Count) {
+                        $tooltip += [Environment]::NewLine + 'Standard: ' + ($standardRoles -join ', ')
+                    }
+                    $grid.Tag.SetToolTip($button, $tooltip)
                     $script:Main.RegisterSelectionButton($button)
                     $button.Add_Click({ param($sender,$eventArgs) Invoke-TaskPloppAudioSelection $sender.Tag.Device $sender.Tag.Flow })
                     $column.Controls.Add($button)
@@ -281,107 +305,11 @@ function Update-TaskPloppAudioView {
 }
 
 function Resize-TaskPloppAudioColumn($Column) {
-    foreach($control in $Column.Controls) {
-        if($control -is [Windows.Forms.Button]) { $control.Width=[Math]::Max(70,$Column.ClientSize.Width-12) }
-        elseif($control -is [Windows.Forms.Label]) { $control.MaximumSize=[Drawing.Size]::new([Math]::Max(60,$Column.ClientSize.Width-12),0) }
+    # Leave room for the vertical scrollbar when sizing buttons and labels.
+    $width = [Math]::Max(1, [Math]::Floor($Column.Parent.ClientSize.Width / 2) -
+        $Column.Margin.Horizontal - [Windows.Forms.SystemInformation]::VerticalScrollBarWidth - 8)
+    foreach ($control in $Column.Controls) {
+        if ($control -is [Windows.Forms.Button]) { $control.Width = $width }
+        elseif ($control -is [Windows.Forms.Label]) { $control.MaximumSize = [Drawing.Size]::new($width, 0) }
     }
-}
-
-function Get-TaskPloppAudioColorKey {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $Name,
-
-        [AllowNull()]
-        [string] $ContainerId
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($ContainerId)) {
-        return 'container:{0}' -f $ContainerId.Trim().ToLowerInvariant()
-    }
-
-    $openingParenthesis = $Name.IndexOf('(')
-    $closingParenthesis = $Name.LastIndexOf(')')
-
-    if ($openingParenthesis -ge 0 -and $closingParenthesis -gt $openingParenthesis) {
-        $key = $Name.Substring(
-            $openingParenthesis + 1,
-            $closingParenthesis - $openingParenthesis - 1
-        )
-        $key = $key -replace '^\d+\s*-\s*', ''
-        return $key.Trim().ToLowerInvariant()
-    }
-
-    return $Name.Trim().ToLowerInvariant()
-}
-
-function Convert-TaskPloppHsvToColor {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [double] $Hue,
-
-        [Parameter(Mandatory = $true)]
-        [double] $Saturation,
-
-        [Parameter(Mandatory = $true)]
-        [double] $Value
-    )
-
-    $chroma = $Value * $Saturation
-    $hueSector = ($Hue % 360.0) / 60.0
-    $secondary = $chroma * (1.0 - [Math]::Abs(($hueSector % 2.0) - 1.0))
-
-    $red = 0.0
-    $green = 0.0
-    $blue = 0.0
-
-    switch ([Math]::Floor($hueSector)) {
-        0 { $red = $chroma; $green = $secondary; break }
-        1 { $red = $secondary; $green = $chroma; break }
-        2 { $green = $chroma; $blue = $secondary; break }
-        3 { $green = $secondary; $blue = $chroma; break }
-        4 { $red = $secondary; $blue = $chroma; break }
-        default { $red = $chroma; $blue = $secondary; break }
-    }
-
-    $matchValue = $Value - $chroma
-    return [System.Drawing.Color]::FromArgb(
-        [int][Math]::Round(($red + $matchValue) * 255.0),
-        [int][Math]::Round(($green + $matchValue) * 255.0),
-        [int][Math]::Round(($blue + $matchValue) * 255.0)
-    )
-}
-
-function Get-TaskPloppAudioColor {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $Name,
-
-        [AllowNull()]
-        [string] $ContainerId
-    )
-
-    $key = Get-TaskPloppAudioColorKey -Name $Name -ContainerId $ContainerId
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($key)
-    $hashProvider = [System.Security.Cryptography.SHA256]::Create()
-
-    try {
-        $hash = $hashProvider.ComputeHash($bytes)
-    }
-    finally {
-        $hashProvider.Dispose()
-    }
-
-    $palette = @(for ($index = 0; $index -lt 127; $index++) {
-        $hue = ($index * 137.507764) % 360.0
-        $saturation = @(0.38, 0.48, 0.58)[$index % 3]
-        $value = @(0.90, 0.97)[$index % 2]
-        Convert-TaskPloppHsvToColor -Hue $hue -Saturation $saturation -Value $value
-    })
-
-    $paletteIndex = [BitConverter]::ToUInt32($hash, 0) % $palette.Count
-    return $palette[$paletteIndex]
 }

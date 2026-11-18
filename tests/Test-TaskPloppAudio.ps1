@@ -10,16 +10,20 @@ foreach($type in @([TaskPloppInterop.AudioEnumerator],[TaskPloppInterop.AudioEnd
 }
 $enumerator=New-TaskPloppAudioEnumerator
 Assert ([Runtime.InteropServices.Marshal]::ReleaseComObject($enumerator)-eq0) 'Zusaetzliche COM-Referenz des Erzeugers bleibt uebrig.'
-$device=[pscustomobject]@{Id='A';Name='Testmikrofon';ContainerId='group-1'}
+$device=[pscustomobject]@{Id='A';Name='Testmikrofon'}
 $all=@(0..2 | ForEach-Object { [pscustomobject]@{Role=$_;Id='A';Error=''} })
-Assert ((Get-TaskPloppAudioLabel $device $all) -like '[[]Aktiv[]]*') 'Einheitlicher Standard nicht markiert.'
 $all[2].Id='B'
-$label=Get-TaskPloppAudioLabel $device $all
-Assert ($label -like '*Console*Multimedia*' -and $label -notlike '*Aktiv*') 'Unterschiedliche Rollen falsch dargestellt.'
-$color1=Get-TaskPloppAudioColor -Name 'Lautsprecher (Test)' -ContainerId 'same'
-$color2=Get-TaskPloppAudioColor -Name 'Mikrofon (Test)' -ContainerId 'same'
-Assert ($color1.ToArgb() -eq $color2.ToArgb()) 'Geraetepaare haben unterschiedliche Farben.'
-Write-Output 'OK: COM-Signaturen, PROPVARIANT, Rollenanzeige und Geraetefarben.'
+$examples = [ordered]@{
+    'Lautsprecher (3- Realtek(R) Audio)' = 'Realtek(R) Audio'
+    'Mikrofon (Jabra Link 380)' = 'Jabra Link 380'
+    'LG ULTRAWIDE (NVIDIA High Definition Audio)' = 'LG ULTRAWIDE'
+    'USB Audio' = 'USB Audio'
+    'Mikrofon (3- )' = 'Mikrofon (3- )'
+}
+foreach ($name in $examples.Keys) {
+    Assert ((Get-TaskPloppAudioDisplayName $name) -ceq $examples[$name]) "Anzeigename falsch: $name"
+}
+Write-Output 'OK: COM-Signaturen, PROPVARIANT und Anzeigenamen.'
 
 # Inspect live hardware without changing it by default.
 foreach($flow in 0,1) {
@@ -60,6 +64,7 @@ function Set-TaskPloppAudioDefault($Id) { throw 'Test: Geraet inzwischen entfern
 Invoke-TaskPloppAudioSelection $device 1
 Assert ($script:MessageKind -eq 'Error' -and $script:RefreshCount -eq 3) 'Fehler nicht gemeldet oder Ansicht nicht erneuert.'
 function Get-TaskPloppAudioDevices($Flow) { @() }
+$script:CurrentView='Audio'
 $script:Main=New-Object Windows.Forms.Form
 Initialize-TaskPloppKeyboard $script:Main
 $script:ListPanel=New-Object Windows.Forms.FlowLayoutPanel

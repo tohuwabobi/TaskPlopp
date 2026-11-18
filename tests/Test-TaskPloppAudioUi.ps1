@@ -17,11 +17,77 @@ $testConfig=Join-Path $env:TEMP ('TaskPlopp-audio-ui-'+[guid]::NewGuid().ToStrin
         $content=$sender.Controls.Find('TaskContent',$true)[0]
         $firstTask=@($content.Controls | Where-Object {$_ -is [Windows.Forms.Button]})[0].Text
         $toggle=$sender.Controls.Find('AudioToggle',$true)[0]
+        $script:AudioUiDevices = @(
+            @(
+                [pscustomobject]@{Id='r'; Name='Lautsprecher (3- Realtek(R) Audio)'}
+                [pscustomobject]@{Id='lg'; Name='LG ULTRAWIDE (NVIDIA High Definition Audio)'}
+                [pscustomobject]@{Id='j'; Name='Lautsprecher (Jabra Link 380)'}
+            ),
+            @(
+                [pscustomobject]@{Id='z'; Name='Mikrofon (Zubehör mit besonders langem Namen für die Anzeige)'}
+                [pscustomobject]@{Id='m2'; Name='Mikrofon (2- Doppelgerät)'}
+                [pscustomobject]@{Id='m1'; Name='Mikrofon (1- Doppelgerät)'}
+                [pscustomobject]@{Id='cam'; Name='Mikrofon (Insta360 Link 2 Pro)'}
+            )
+        )
+        $script:AudioUiDefaults = @(@('j','j','j'), @('m1','m1','m2'))
+        $script:AudioUiSelected = $null
+        function script:Get-TaskPloppAudioDevices($Flow) { $script:AudioUiDevices[$Flow] }
+        function script:Get-TaskPloppAudioDefaults($Flow) {
+            foreach ($role in 0..2) {
+                $id = $script:AudioUiDefaults[$Flow][$role]
+                $readError = if ($id -eq 'm2') { 'Fixture role read error' } else { '' }
+                [pscustomobject]@{ Id=$id; Role=$role; Error=$readError }
+            }
+        }
+        function script:Set-TaskPloppAudioDefault($Id) {
+            $script:AudioUiSelected = $Id
+            $script:AudioUiDefaults[0] = @($Id,$Id,$Id)
+        }
+        $sender.Size=[Drawing.Size]::new(760,650)
         $watch=[Diagnostics.Stopwatch]::StartNew()
         $toggle.PerformClick(); $watch.Stop()
         Assert $sender.AudioView 'Audioansicht nicht aktiviert.'
         Assert ($content.Controls.Count -eq 1 -and $content.Controls[0].Name -eq 'AudioColumns') 'Tasks wurden nicht ersetzt.'
         Assert ($content.Controls[0].Controls.Count -eq 2) 'Zwei Audiospalten fehlen.'
+        $expectedIds = @('j','lg','r','m1','m2','cam','z')
+        $expectedLabels = @(
+            'Jabra Link 380', 'LG ULTRAWIDE', 'Realtek(R) Audio', 'Mikrofon (1- Doppelgerät)',
+            'Mikrofon (2- Doppelgerät)', 'Insta360 Link 2 Pro', 'Zubehör mit besonders langem Namen für die Anzeige'
+        )
+        $expectedColors = @('FDE047','F87171','60A5FA','4ADE80','F472B6','FB923C','FDE047')
+        function Assert-AudioRows([string]$StandardId) {
+            $buttons = $sender.SelectionButtons
+            Assert ($buttons.Count -eq $expectedIds.Count) 'Synthetische Geraeteliste unvollstaendig.'
+            for ($i=0; $i -lt $expectedIds.Count; $i++) {
+                $button = $buttons[$i]
+                $id = $expectedIds[$i]
+                Assert ($button.Tag.Device.Id -eq $id) "Falsches Geraet an Position $i."
+                Assert ($button.Text -ceq ('[{0}]  {1}' -f ($i+1),$expectedLabels[$i])) "Anzeige oder Tastennummer falsch: $($button.Text)"
+                Assert ($button.ForeColor.ToArgb() -eq [Drawing.Color]::Black.ToArgb()) 'Schrift ist nicht schwarz.'
+                foreach ($background in @($button.BackColor,$button.FlatAppearance.MouseOverBackColor,$button.FlatAppearance.MouseDownBackColor)) {
+                    $actualHex = '{0:X2}{1:X2}{2:X2}' -f $background.R,$background.G,$background.B
+                    Assert ($actualHex -eq $expectedColors[$i]) "Farbe an Position $i abweichend: $actualHex"
+                    $rgb = @($background.R,$background.G,$background.B | ForEach-Object {
+                        $x = $_ / 255.0
+                        if ($x -le 0.04045) { $x / 12.92 } else { [Math]::Pow(($x + 0.055)/1.055,2.4) }
+                    })
+                    $contrast = (0.2126*$rgb[0]+0.7152*$rgb[1]+0.0722*$rgb[2]+0.05)/0.05
+                    Assert ($contrast -ge 7) "Kontrast unter 7:1: $actualHex"
+                }
+                $border = if ($id -in @($StandardId,'m1')) { 3 } else { 1 }
+                Assert ($button.FlatAppearance.BorderSize -eq $border) "Aktivrahmen falsch: $id"
+                $tooltip = $content.Controls[0].Tag.GetToolTip($button)
+                $expectedHint = $button.Tag.Device.Name
+                if ($id -eq $StandardId) { $expectedHint += [Environment]::NewLine + 'Standard: Console, Multimedia, Kommunikation' }
+                if ($id -eq 'm1') { $expectedHint += [Environment]::NewLine + 'Standard: Console, Multimedia' }
+                Assert ($tooltip -ceq $expectedHint) "Tooltip falsch: $tooltip"
+            }
+        }
+        Assert-AudioRows 'j'
+        $sender.SelectionButtons[1].PerformClick()
+        Assert ($script:AudioUiSelected -eq 'lg') 'Audio-Button schaltet falsche Endpoint-ID.'
+        Assert-AudioRows 'lg'
         $bar=$sender.Controls.Find('Messages',$true)[0]
         Set-TaskPloppMessage Warning ('Eine laengere Warnung muss in der ersten Zeile lesbar bleiben. ' * 5) ('Auch die zweite Zeile darf lang sein. ' * 8)
         Assert $bar.IsScrolling 'Laufschrift fuer lange Texte fehlt.'

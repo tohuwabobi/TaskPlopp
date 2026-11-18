@@ -87,7 +87,9 @@ Das groessere Startfenster nutzt bis zu 760 x 1200 Pixel und bleibt bildschirmbe
 
 Erfolg erscheint erst nach Ruecklesen aller drei Rollen. **[Aktiv]** bedeutet,
 dass alle Rollen dasselbe Geraet nutzen; andernfalls stehen die einzelnen Rollen
-an den jeweils verwendeten Geraeten. Zusammengehoerige Geraete erhalten dieselbe Farbe.
+an den jeweils verwendeten Geraeten. Je Spalte alphabetisch nach erkennbarem
+Geraetenamen, mit sechs wiederkehrenden Farben und festen Tastennummern beim
+Umschalten. Der Tooltip zeigt den vollen Windows-Geraetenamen und die Rollen.
 
 **Aktualisieren** liest die gerade sichtbare Ansicht neu ein. Abgezogene Geraete
 verschwinden nach dem Aktualisieren; fehlende Standards und Lesefehler werden
@@ -109,7 +111,7 @@ Meldungsboxen oder Tray-Sprechblasen. In der offenen Konfiguration gibt es diese
 zweizeilige Leiste, damit Fehler dort sichtbar bleiben. Keine automatische Oeffnung
 der Konfiguration bei fehlendem Favoritenziel; dazu das Zahnrad verwenden.
 
-Die Audio-Core-Logik und Geraetefarben stammen aus dem lokalen TDAudioSwitch,
+Die Audio-Core-Logik stammt aus dem lokalen TDAudioSwitch,
 liegen aber vollstaendig im TaskPlopp-Repository. COM-Signaturen wurden korrigiert;
 die alte CLI/GUI wird nicht gestartet. Keine Module und kein zweiter Prozess noetig.
 Windows-Standardgeraete sind keine per-App- oder Citrix-Geraeteeinstellungen.
